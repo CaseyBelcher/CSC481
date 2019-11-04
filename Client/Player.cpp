@@ -10,7 +10,7 @@ public:
 
 	int clientID; 
 	Player(float num) : CircleShape(num) {
-
+		this->clientID = 0; 
 	}
 
 

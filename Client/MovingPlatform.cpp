@@ -5,8 +5,10 @@
 #include <iostream>
 
 class MovingPlatform : public sf::RectangleShape {
-public:
-	MovingPlatform(sf::Vector2f vector) : sf::RectangleShape(vector) {
-
-	}
+	public:
+	
+		int id; 
+		MovingPlatform(sf::Vector2f vector) : sf::RectangleShape(vector) {
+			this->id = 0;
+		}
 };

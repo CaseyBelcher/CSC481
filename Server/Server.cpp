@@ -7,21 +7,42 @@
 #include <time.h>
 #include "zhelpers.hpp"
 #include <thread>
+#include <nlohmann/json.hpp>
+
 
 #include "Player.cpp"
 
 
 using namespace std; 
 
+// for convenience
+using json = nlohmann::json;
 
 zmq::context_t context(1);
-vector <Player> players; 
+//vector <Player> players; 
+map<int, Player> players;
 
 
-void executeAction(int playerIndex, string action) {
+void executeAction(int clientID, string action) {
+
+	cout << "Player: " + to_string(players.at(clientID).clientID) + " - message: " + action << endl; 
+
+
+	if (action == "left") {
+		float oldX = players.at(clientID).getPosition().x; 
+		float newX = oldX - 0.01f;
+
+		players.at(clientID).setPosition(newX, players.at(clientID).getPosition().y);
+	}
+
+	
+
+
 
 	//std::cout << "Player: " + std::to_string(players[playerIndex].clientID) + " - action: " + action << std::endl;
+	
 
+	/* 
 
 	if (action == "right") {
 		float oldX = players[playerIndex].getPosition().x; 
@@ -32,12 +53,42 @@ void executeAction(int playerIndex, string action) {
 
 
 	}
-	if (action == "left") {
+	else if (action == "left") {
 		float oldX = players[playerIndex].getPosition().x;
 		float newX = oldX - 0.01f;
 
 		players[playerIndex].setPosition(newX, players[playerIndex].getPosition().y);
 	}
+
+	else {
+		// create object from string literal
+			// json j = "{ \"happy\": true, \"pi\": 3.141 }"_json;
+		
+		// parse explicitly
+			// auto j3 = json::parse("{ \"happy\": true, \"pi\": 3.141 }");
+
+		// json j = json::parse(action); 
+		
+		//// find an entry
+		//json::iterator it = j.find("one"); 
+		//if (it != j.end()) {
+
+		//	//std::cout << it.value() << std::endl;
+		//	//std::cout << "what" << std::endl;
+
+		//	string whatever = it.value(); 
+		//	std::cout << whatever << std::endl;
+
+		//
+		//
+		//}
+	
+	
+	
+	}
+
+	*/ 
+
 
 
 }
@@ -60,9 +111,36 @@ void pullThread()
 		std::string contents = s_recv(receiver);
 		
 
-		// Parse the client's message 
+		// Parse the client's message  
+		json result = json::parse(contents);
+		int thisClientID = result.at("clientID"); 
+		string message = result.at("message");
+
+
+		// try to find player 
+		map<int, Player>::iterator it = players.find(thisClientID);
+		
+		// player not found, create a new player 
+		if (it == players.end()) {
+			Player newPlayer(50.f);
+			newPlayer.setPosition(100.f, 100.f);
+			newPlayer.setFillColor(sf::Color::Green);
+			newPlayer.clientID = thisClientID;
+			players.insert(pair<int, Player>(newPlayer.clientID, newPlayer));
+		}
+
+
+		// execute action for that player 
+		executeAction(thisClientID, message); 
+
+		
+		
+
 		//	format: playerID action(left/right/jump) 
 		//	example: 1234 left
+		
+		/* 
+		
 		stringstream myStream(contents);
 		string token;
 		vector <string> tokens;
@@ -122,6 +200,8 @@ void pullThread()
 			}
 		}
 
+		*/ 
+
 
 	}
 	
@@ -153,25 +233,38 @@ int main()
 		Sleep(1); 
 		if (!players.empty()) {
 	
+			/*
+			map<int, Player>::iterator itr;
+			for (itr = players.begin(); itr != players.end(); ++itr) {
+				window.draw(itr->second);
+			}
+			*/ 
+
+
 			vector<string> messages;
-			// string playerId = std::to_string(players[0].clientID);
 			
 
-			// string message1 = "t:player i:" + playerId + " x:" + std::to_string(players[0].getPosition().x) + " y:300";
-			// messages.push_back(message1);
-
+			/* 
 			for (int i = 0; i < players.size(); i++) {
 				string playerId = std::to_string(players[i].clientID);
 
 				string thisMessage = "t:player i:" + playerId + " x:" + std::to_string(players[i].getPosition().x) + " y:300"; 
 				messages.push_back(thisMessage); 
 			}
+			*/ 
+
+			map<int, Player>::iterator itr;
+			for (itr = players.begin(); itr != players.end(); ++itr) {
+				string playerId = to_string(itr->second.clientID);
+
+				string thisMessage = "t:player i:" + playerId + " x:" + std::to_string(players[i].getPosition().x) + " y:300";
+				messages.push_back(thisMessage);
+			}
 
 
 			for (int i = 0; i < messages.size(); i++) {
 				//Sleep(500);
-				//std::cout << "sending message: " + messages[i] << std::endl; 
-				//s_send(publisher, message1);
+				std::cout << "sending message: " + messages[i] << std::endl; 
 				s_send(publisher, messages[i]);
 			}
 

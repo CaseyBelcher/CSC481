@@ -13,9 +13,16 @@
 #include <stdio.h> 
 #include <stdlib.h> 
 #include <iomanip> 
+#include <nlohmann/json.hpp>
 
 using namespace std::chrono; 
 using namespace std; 
+// for convenience
+using json = nlohmann::json;
+
+
+
+
 
 //  Prepare our context
 zmq::context_t context(1);
@@ -48,6 +55,42 @@ void detectCollision(Player player, sf::FloatRect playerBound, sf::FloatRect pla
 	Responsible for detecting user input and PUSHing to server
 */
 void pushThread(int clientID) {
+
+	/*
+	json j2 = {
+	  {"pi", 3.141},
+	  {"happy", true},
+	  {"name", "Niels"},
+	  {"nothing", nullptr},
+	  {"answer", {
+		{"everything", 42}
+	  }},
+	  {"list", {1, 0, 2}},
+	  {"object", {
+		{"currency", "USD"},
+		{"value", 42.99}
+	  }}
+	};
+	*/ 
+ 
+
+
+	json userInput =
+	{
+		{"clientID", clientID},
+		{"type", "userInput"},
+		{"timestamp", 666},
+		{"message", "left"}, // left, right, jump 
+	};
+
+
+	json firstConnection =
+	{
+		{"clientID", clientID},
+		{"type", "firstConnection"}
+	}; 
+
+
 	
 	//  Prepare PUSH  
 	zmq::socket_t sender(context, ZMQ_PUSH);
@@ -57,14 +100,20 @@ void pushThread(int clientID) {
 	bool firstConnection = true; 
 	while (window.isOpen()) {
 
+		//// if this is our first time connecting, let server know to display us 
+		//if (firstConnection) {
+		//	string message = std::to_string(clientID) + " connect";
+		//	//std::cout << "sending: " + message << std::endl;
+		//	s_send(sender, message);
+		//	//std::cout << "Command Sent" << std::endl;
+
+		//	firstConnection = false;
+		//}
+
 		// if this is our first time connecting, let server know to display us 
 		if (firstConnection) {
-			string message = std::to_string(clientID) + " connect";
-			//std::cout << "sending: " + message << std::endl;
-			s_send(sender, message);
-			//std::cout << "Command Sent" << std::endl;
-
-			firstConnection = false; 
+			s_send(sender, object2.dump());
+			firstConnection = false;
 		}
 		
 		
@@ -103,6 +152,13 @@ void pushThread(int clientID) {
 
 int main()
 {
+
+
+
+	
+
+
+
 
 	// create moving platform rectangle 
 	MovingPlatform movingPlatform(sf::Vector2f(120.f, 50.f));
@@ -219,7 +275,7 @@ int main()
 					newPlayer.setPosition(100.f, 100.f);
 					newPlayer.setFillColor(sf::Color::Green);
 					newPlayer.clientID = thisId; 
-					players.insert(pair<int, Player>(newPlayer.clientID, player));
+					players.insert(pair<int, Player>(newPlayer.clientID, newPlayer));
 				}
 				
 			

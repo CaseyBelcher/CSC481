@@ -56,91 +56,81 @@ void detectCollision(Player player, sf::FloatRect playerBound, sf::FloatRect pla
 */
 void pushThread(int clientID) {
 
-	/*
-	json j2 = {
-	  {"pi", 3.141},
-	  {"happy", true},
-	  {"name", "Niels"},
-	  {"nothing", nullptr},
-	  {"answer", {
-		{"everything", 42}
-	  }},
-	  {"list", {1, 0, 2}},
-	  {"object", {
-		{"currency", "USD"},
-		{"value", 42.99}
-	  }}
-	};
-	*/ 
- 
-
-
-	json userInput =
-	{
-		{"clientID", clientID},
-		{"type", "userInput"},
-		{"timestamp", 666},
-		{"message", "left"}, // left, right, jump 
-	};
-
-
-	json firstConnection =
-	{
-		{"clientID", clientID},
-		{"type", "firstConnection"}
-	}; 
-
-
-	
 	//  Prepare PUSH  
 	zmq::socket_t sender(context, ZMQ_PUSH);
 	sender.connect("tcp://localhost:5558");
 
-	
 	bool firstConnection = true; 
 	while (window.isOpen()) {
 
-		//// if this is our first time connecting, let server know to display us 
-		//if (firstConnection) {
-		//	string message = std::to_string(clientID) + " connect";
-		//	//std::cout << "sending: " + message << std::endl;
-		//	s_send(sender, message);
-		//	//std::cout << "Command Sent" << std::endl;
-
-		//	firstConnection = false;
-		//}
-
 		// if this is our first time connecting, let server know to display us 
+		json connectMessage =
+		{
+			{"clientID", clientID},
+			{"type", "firstConnection"}, 
+			{"timestamp", 666}, 
+			{"message", "connecting"}
+		};
 		if (firstConnection) {
-			s_send(sender, object2.dump());
+			// cout << "connecting to server...." << endl; 
+			s_send(sender, connectMessage.dump());
 			firstConnection = false;
 		}
 		
 		
-
-
 		if (hasFocus) {
 
 			if (sf::Keyboard::isKeyPressed(sf::Keyboard::Left))
 			{
-				string message = std::to_string(clientID) + " left";
-				//std::cout << "sending: " + message << std::endl;
-				s_send(sender, message);
-				//std::cout << "Command Sent" << std::endl;
+				json userInput =
+				{
+					{"clientID", clientID},
+					{"type", "userInput"},
+					{"timestamp", 666},
+					{"message", "left"},  
+				};
+
+				// cout << "message sent: " + userInput.dump() << endl;
+				s_send(sender, userInput.dump());
 			}
 			if (sf::Keyboard::isKeyPressed(sf::Keyboard::Right))
 			{
-				string message = std::to_string(clientID) + " right";
-				//std::cout << "sending: " + message << std::endl;
-				s_send(sender, message);
-				//std::cout << "Command Sent" << std::endl;
+				json userInput =
+				{
+					{"clientID", clientID},
+					{"type", "userInput"},
+					{"timestamp", 666},
+					{"message", "right"},
+				};
+
+				// cout << "message sent: " + userInput.dump() << endl;
+				s_send(sender, userInput.dump());
 			}
 			if (sf::Keyboard::isKeyPressed(sf::Keyboard::Up))
 			{
-				string message = std::to_string(clientID) + " up";
-				//std::cout << "sending: " + message << std::endl;
-				s_send(sender, message);
-				//std::cout << "Command Sent" << std::endl;
+				json userInput =
+				{
+					{"clientID", clientID},
+					{"type", "userInput"},
+					{"timestamp", 666},
+					{"message", "up"},
+				};
+
+				// cout << "message sent: " + userInput.dump() << endl;
+				s_send(sender, userInput.dump());
+			}
+			if (sf::Keyboard::isKeyPressed(sf::Keyboard::Down))
+			{
+				json userInput =
+				{
+					{"clientID", clientID},
+					{"type", "userInput"},
+					{"timestamp", 666},
+					{"message", "down"},
+				};
+
+				// cout << "message sent: " + userInput.dump() << endl;
+				s_send(sender, userInput.dump());
 			}
 
 
@@ -202,88 +192,48 @@ int main()
 
 	while (window.isOpen()) {
 
-
 		//  get SUB message from Server  
 		std::string contents = s_recv(subscriber);
 		//std::cout << "contents: " + contents << std::endl;
 
-		// format of Server message: 
-		// (type of object, id of object, xPosition, yPosition)
-		// t:player i:1234 x:200 y:200- 
+		// Parse message 
+		json subMessage = json::parse(contents); 
+		string type = subMessage.at("type"); 
+		int id = subMessage.at("id"); 
+		float newX = subMessage.at("xPosition"); 
+		float newY = subMessage.at("yPosition"); 
 		
-		// parse the Server's message into positions for each object for each player 
-		stringstream myStream(contents);
-		string token;
-		vector <string> objectTokens;
-		while (getline(myStream, token, '-')) {
-			if (!token.empty()) {
-				objectTokens.push_back(token);
-				//std::cout << "token found: " + token << std::endl;
+		vector<json> playersList = subMessage.at("players"); 
+		json firstPlayer = playersList.at(0);
+		cout << firstPlayer.dump() << endl; 
+
+		
+		
+		if (type == "player") {
+
+			map<int, Player>::iterator it = players.find(id);
+
+			// player found 
+			if (it != players.end()) {
+				it->second.setPosition(newX, newY);
 			}
+			// player not found, create a new player 
+			else {
+				Player newPlayer(50.f);
+				newPlayer.setPosition(newX, newY);
+				newPlayer.setFillColor(sf::Color::Green);
+				newPlayer.clientID = id;
+				players.insert(pair<int, Player>(newPlayer.clientID, newPlayer));
+			}
+
 		}
-		// for each objectToken found  
-		for (int i = 0; i < objectTokens.size(); i++) {
+		else if (type == "movingPlatform") {
 
-			string type = "";
-			int thisId = 0;
-			float newX = 0;
-			float newY = 0;
-
-			stringstream myStream2(objectTokens[i]);
-			while (getline(myStream2, token, ' ')) {
-				if (!token.empty()) {
-					string header = token.substr(0, 2);
-					string body = token.substr(2, token.size() - 2);
-					if (header == "t:") {
-						type = body; 
-					}
-					else if (header == "i:") {
-						stringstream stringToInt(body); 
-						stringToInt >> thisId; 
-
-						//thisId = std::stof(body);
-					}
-					else if (header == "x:") {
-						newX = std::stof(body);
-					}
-					else if (header == "y:") {
-						newY = std::stof(body);
-					}
-
-				}
-			}
-
-			if (type == "movingPlatform") {
-				
-			}
-			else if (type == "platform") {
-			
-			}
-			else if (type == "player") {
-
-				map<int, Player>::iterator it = players.find(thisId); 
-
-				// player found 
-				if (it != players.end()) {
-					//players.at(thisId).setPosition(newX, newY);
-					it->second.setPosition(newX, newY); 
-				}
-				// player not found, create a new player 
-				else {
-
-					Player newPlayer(50.f);
-					newPlayer.setPosition(100.f, 100.f);
-					newPlayer.setFillColor(sf::Color::Green);
-					newPlayer.clientID = thisId; 
-					players.insert(pair<int, Player>(newPlayer.clientID, newPlayer));
-				}
-				
-			
-			}
-				
 		}
+		else if (type == "platform") {
 
-
+		}
+		
 
 
 		// check all the window's events that were triggered since the last iteration of the loop

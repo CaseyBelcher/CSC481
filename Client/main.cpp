@@ -142,48 +142,17 @@ void pushThread(int clientID) {
 
 int main()
 {
-
-
-
-	
-
-
-
-
-	// create moving platform rectangle 
-	MovingPlatform movingPlatform(sf::Vector2f(120.f, 50.f));
-	movingPlatform.setSize(sf::Vector2f(100.f, 100.f));
-	movingPlatform.setPosition(300.f, 300.f);
-	movingPlatform.id = 1; 
-	pair<int, MovingPlatform> thisPair(); 
-	
-
-	movingPlatforms.insert(pair<int, MovingPlatform>(movingPlatform.id, movingPlatform)); 
-
-	// create static platform rectangle and set its texture 
-	Platform platform(sf::Vector2f(120.f, 250.f));
-	platform.setSize(sf::Vector2f(100.f, 100.f));
-	platform.setPosition(20.f, 300.f);
-	platform.setFillColor(sf::Color::Blue);
-	platform.setOutlineColor(sf::Color::White);
-	platform.setOutlineThickness(5);
-	platform.id = 1; 
-	platforms.insert(pair<int, Platform>(platform.id, platform));
-
-
 	// create player circle 
 	Player player(50.f);
 	player.setPosition(100.f, 100.f);
 	player.setFillColor(sf::Color::Green);
-	// Use current time as seed for random generator 
 	srand(time(0));
-	// client identifier 
 	player.clientID = rand(); 
 	players.insert(pair<int, Player>(player.clientID, player));
 
-
 	// start push thread 
 	thread t1(pushThread, player.clientID);
+
 	// Prepare SUB socket 
 	zmq::socket_t subscriber(context, ZMQ_SUB);
 	subscriber.connect("tcp://localhost:5563");
@@ -197,20 +166,21 @@ int main()
 		//std::cout << "contents: " + contents << std::endl;
 
 		// Parse message 
+		
 		json subMessage = json::parse(contents); 
-		string type = subMessage.at("type"); 
-		int id = subMessage.at("id"); 
-		float newX = subMessage.at("xPosition"); 
-		float newY = subMessage.at("yPosition"); 
-		
-		vector<json> playersList = subMessage.at("players"); 
-		json firstPlayer = playersList.at(0);
-		cout << firstPlayer.dump() << endl; 
 
+		vector<json> playersList = subMessage.at(0); 
+		vector<json> movingPlatformsList = subMessage.at(1); 
+		vector<json> platformsList = subMessage.at(2); 
 		
+		// parse player information 
+		for (int i = 0; i < playersList.size(); i++) {
+			
+			json thisPlayer = playersList.at(i); 
+			int id = thisPlayer.at("id"); 
+			float newX = thisPlayer.at("xPosition"); 
+			float newY = thisPlayer.at("yPosition"); 
 		
-		if (type == "player") {
-
 			map<int, Player>::iterator it = players.find(id);
 
 			// player found 
@@ -225,34 +195,76 @@ int main()
 				newPlayer.clientID = id;
 				players.insert(pair<int, Player>(newPlayer.clientID, newPlayer));
 			}
+		
+		}
+		// parse movingPlatform information 
+		for (int i = 0; i < movingPlatformsList.size(); i++) {
+
+			json thisMovingPlatform = movingPlatformsList.at(i);
+			int id = thisMovingPlatform.at("id");
+			float newX = thisMovingPlatform.at("xPosition");
+			float newY = thisMovingPlatform.at("yPosition");
+
+			map<int, MovingPlatform>::iterator it = movingPlatforms.find(id);
+
+			// movingPlatform found 
+			if (it != movingPlatforms.end()) {
+				it->second.setPosition(newX, newY);
+			}
+			// movingPlatform not found, create a new movingPlatform 
+			else {
+				
+				MovingPlatform movingPlatform(sf::Vector2f(120.f, 50.f));
+				movingPlatform.setSize(sf::Vector2f(100.f, 100.f));
+				movingPlatform.setPosition(newX, newY);
+				movingPlatform.id = id;
+				movingPlatforms.insert(pair<int, MovingPlatform>(movingPlatform.id, movingPlatform));
+
+			}
 
 		}
-		else if (type == "movingPlatform") {
+		// parse platform information 
+		for (int i = 0; i < platformsList.size(); i++) {
 
-		}
-		else if (type == "platform") {
+			json thisPlatform = platformsList.at(i);
+			int id = thisPlatform.at("id");
+			float newX = thisPlatform.at("xPosition");
+			float newY = thisPlatform.at("yPosition");
+
+			map<int, Platform>::iterator it = platforms.find(id);
+
+			// Platform found 
+			if (it != platforms.end()) {
+				it->second.setPosition(newX, newY);
+			}
+			// Platform not found, create a new Platform 
+			else {
+
+				Platform platform(sf::Vector2f(120.f, 250.f));
+				platform.setSize(sf::Vector2f(100.f, 100.f));
+				platform.setPosition(newX, newY);
+				platform.setFillColor(sf::Color::Blue);
+				platform.setOutlineColor(sf::Color::White);
+				platform.setOutlineThickness(5);
+				platform.id = id;
+				platforms.insert(pair<int, Platform>(platform.id, platform));
+
+			}
 
 		}
 		
 
-
-		// check all the window's events that were triggered since the last iteration of the loop
+		// check for window related events
 		sf::Event event;
 		while (window.pollEvent(event))
 		{
-			// "close requested" event: we close the window
 			if (event.type == sf::Event::Closed) {
 				window.close();
 			}
-
-
 			else if (event.type == sf::Event::LostFocus) {
-				//std::cout << "LostFocus case 2...." << std::endl;
 				hasFocus = false; 
 			}
-
 			else if (event.type == sf::Event::GainedFocus) {
-				//std::cout << "GainedFocus case 2...." << std::endl;
 				hasFocus = true;
 			}
 		}
@@ -262,13 +274,23 @@ int main()
 		window.clear(sf::Color::Black);
 
 		
-		// re-draw everything 
-		window.draw(movingPlatform);
+		// re-draw players  
 		map<int, Player>::iterator itr;
 		for (itr = players.begin(); itr != players.end(); ++itr) {
-			window.draw(itr->second); 
+			window.draw(itr->second);
 		}
-		window.draw(platform);
+
+		// re-draw moving platforms   
+		map<int, MovingPlatform>::iterator itr2;
+		for (itr2 = movingPlatforms.begin(); itr2 != movingPlatforms.end(); ++itr2) {
+			window.draw(itr2->second);
+		}
+
+		// re-draw platforms 
+		map<int, Platform>::iterator itr3;
+		for (itr3 = platforms.begin(); itr3 != platforms.end(); ++itr3) {
+			window.draw(itr3->second);
+		}
 
 
 		// end the current frame

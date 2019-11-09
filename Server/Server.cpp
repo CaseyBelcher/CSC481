@@ -11,7 +11,8 @@
 
 
 #include "Player.cpp"
-
+#include "MovingPlatform.cpp"
+#include "Platform.cpp"
 
 using namespace std; 
 
@@ -19,8 +20,9 @@ using namespace std;
 using json = nlohmann::json;
 
 zmq::context_t context(1);
-//vector <Player> players; 
 map<int, Player> players;
+map<int, MovingPlatform> movingPlatforms; 
+map<int, Platform> platforms; 
 
 
 void executeAction(int clientID, string message) {
@@ -103,6 +105,23 @@ void pullThread()
 
 int main()
 {
+	// create default moving platform 
+	MovingPlatform movingPlatform(sf::Vector2f(120.f, 50.f));
+	movingPlatform.setSize(sf::Vector2f(100.f, 100.f));
+	movingPlatform.setPosition(300.f, 300.f);
+	movingPlatform.id = 1;
+	movingPlatforms.insert(pair<int, MovingPlatform>(movingPlatform.id, movingPlatform));
+
+	// create default platform 
+	Platform platform(sf::Vector2f(120.f, 250.f));
+	platform.setSize(sf::Vector2f(100.f, 100.f));
+	platform.setPosition(20.f, 300.f);
+	platform.setFillColor(sf::Color::Blue);
+	platform.setOutlineColor(sf::Color::White);
+	platform.setOutlineThickness(5);
+	platform.id = 1;
+	platforms.insert(pair<int, Platform>(platform.id, platform));
+
 	// start pull thread 
 	thread t1(pullThread);
 
@@ -110,42 +129,66 @@ int main()
 	zmq::socket_t publisher(context, ZMQ_PUB);
 	publisher.bind("tcp://*:5563");
 
-
-	// format of Server message 
-	// (type of object, id of object, xPosition, yPosition)
-	// t:player i:1234 x:200 y:200-
 	while (1) {
 		Sleep(1); 
 
 		if (!players.empty()) {
-			vector<string> messages;
 
+			vector<string> messages;
+			json rootMessage; 
+			json playersMessages; 
+			json movingPlatformsMessages; 
+			json platformsMessages; 
+
+			// add all players to list  
 			map<int, Player>::iterator itr;
 			for (itr = players.begin(); itr != players.end(); ++itr) {
 
-				json publishMessage =
+				json playersMessage =
 				{
-					{"type", "player"},
 					{"id", itr->second.clientID},
 					{"xPosition", itr->second.getPosition().x},
-					{"yPosition", itr->second.getPosition().y}, 
-					{"players", {
-						{
-							{"id", 12345},
-							{"xPosition", 33}, 
-							{"yPosition", 44}
-						},
-						{
-							{"id", 44444},
-							{"xPosition", 11},
-							{"yPosition", 22}
-						}
-					}}
+					{"yPosition", itr->second.getPosition().y}
 				};
 				
-				messages.push_back(publishMessage.dump());
+				playersMessages.push_back(playersMessage); 
 
 			}
+
+			// add all movingPlatforms to list
+			map<int, MovingPlatform>::iterator itr2;
+			for (itr2 = movingPlatforms.begin(); itr2 != movingPlatforms.end(); ++itr2) {
+
+				json movingPlatformMessage =
+				{
+					{"id", itr2->second.id},
+					{"xPosition", itr2->second.getPosition().x},
+					{"yPosition", itr2->second.getPosition().y}
+				};
+
+				movingPlatformsMessages.push_back(movingPlatformMessage);
+
+			}
+
+			// add all platforms to list 
+			map<int, Platform>::iterator itr3;
+			for (itr3 = platforms.begin(); itr3 != platforms.end(); ++itr3) {
+
+				json platformMessage =
+				{
+					{"id", itr3->second.id},
+					{"xPosition", itr3->second.getPosition().x},
+					{"yPosition", itr3->second.getPosition().y}
+				};
+
+				platformsMessages.push_back(platformMessage);
+
+			}
+
+			rootMessage.push_back(playersMessages); 
+			rootMessage.push_back(movingPlatformsMessages); 
+			rootMessage.push_back(platformsMessages); 
+			messages.push_back(rootMessage.dump()); 
 
 
 			for (int i = 0; i < messages.size(); i++) {
@@ -155,10 +198,6 @@ int main()
 
 		}
 
-
-		
-		
-		
 	}
 
 	t1.join();

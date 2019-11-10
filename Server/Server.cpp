@@ -8,6 +8,7 @@
 #include "zhelpers.hpp"
 #include <thread>
 #include <nlohmann/json.hpp>
+#include <queue> 
 
 
 #include "Player.cpp"
@@ -15,8 +16,6 @@
 #include "Platform.cpp"
 
 using namespace std; 
-
-// for convenience
 using json = nlohmann::json;
 
 zmq::context_t context(1);
@@ -24,38 +23,185 @@ map<int, Player> players;
 map<int, MovingPlatform> movingPlatforms; 
 map<int, Platform> platforms; 
 
+class MyEvent {
+	public: 
+		string type; 
+		int priority; 
+		int objectID; 
+		string objectType;
+		string direction; 
+
+		MyEvent(string type, int priority, int objectID, string objectType, string direction) {
+			this->type = type; 
+			this->priority = priority; 
+			this->objectID = objectID; 
+			this->objectType = objectType; 
+			this->direction = direction; 
+		}
+
+};
+
+class EventHandler {
+public:
+
+	EventHandler() {
+	}
+
+	virtual void onEvent(MyEvent e) = 0;
+
+};
+
+class MainEventHandler : EventHandler {
+	public:
+
+		void onEvent(MyEvent e) {
+			if (e.type == "collision") {
+
+			}
+			else if (e.type == "death") {
+
+			}
+			else if (e.type == "spawn") {
+
+			}
+			else if (e.type == "userInput") {
+
+				if (e.direction == "left") {
+					float oldX = players.at(e.objectID).getPosition().x;
+					float newX = oldX - 0.1f;
+
+					players.at(e.objectID).setPosition(newX, players.at(e.objectID).getPosition().y);
+				}
+				else if (e.direction == "right") {
+					float oldX = players.at(e.objectID).getPosition().x;
+					float newX = oldX + 0.1f;
+
+					players.at(e.objectID).setPosition(newX, players.at(e.objectID).getPosition().y);
+				}
+				else if (e.direction == "up") {
+					float oldY = players.at(e.objectID).getPosition().y;
+					float newY = oldY - 0.1f;
+
+					players.at(e.objectID).setPosition(players.at(e.objectID).getPosition().x, newY);
+				}
+				else if (e.direction == "down") {
+					float oldY = players.at(e.objectID).getPosition().y;
+					float newY = oldY + 0.1f;
+
+					players.at(e.objectID).setPosition(players.at(e.objectID).getPosition().x, newY);
+				}
+			}
+			else if (e.type == "startRecording") {
+
+			}
+			else if (e.type == "stopRecording") {
+
+			}
+		}
+};
+
+
+
+
+
+class MyEventManager {
+	public:
+		// <event type, list of handlers interested in that type> 
+		map<string, vector<MainEventHandler>> handlerMap; 
+		queue<MyEvent> firstEvents;
+		queue<MyEvent> secondEvents;
+
+
+		MyEventManager() {
+	
+		}
+	
+		// register an event handler for a type of event  
+		void registerHandler(string type, MainEventHandler handler) {
+			
+			map<string, vector<MainEventHandler>>::iterator it = handlerMap.find(type); 
+			
+			// if this event type not in map yet, add it 
+			if (it == handlerMap.end()) {
+				vector<MainEventHandler> handlers; 
+				handlers.push_back(handler); 
+				handlerMap.insert(pair<string, vector<MainEventHandler>>(type, handlers)); 
+			}
+			else {
+				handlerMap.at(type).push_back(handler);
+			}
+		}
+
+
+		void addEvent(MyEvent event) {
+			if (event.type != "") {
+
+
+
+				if (event.priority == 1) {
+					firstEvents.push(event);
+				}
+				else {
+					secondEvents.push(event);
+				}
+
+			}
+		}
+
+		void handleAllEvents() {
+
+			// go through first priority events first 
+			while (!firstEvents.empty()) {
+				
+				MyEvent thisEvent = firstEvents.front(); 
+				vector<MainEventHandler> handlerList = handlerMap.at(thisEvent.type); 
+				
+				// notify each registered handler about this event  
+				for (int i = 0; i < handlerList.size(); i++) {
+					handlerList.at(i).onEvent(thisEvent); 
+				}
+
+				firstEvents.pop(); 
+
+			}
+
+			// go through events of secondary priority 
+			while (!secondEvents.empty()) {
+
+				MyEvent thisEvent = secondEvents.front();
+				if (thisEvent.type != "") {
+
+					vector<MainEventHandler> handlerList = handlerMap.at(thisEvent.type);
+
+					// notify each registered handler about this event  
+					for (int i = 0; i < handlerList.size(); i++) {
+						handlerList.at(i).onEvent(thisEvent);
+					}
+
+				}
+
+				secondEvents.pop();
+
+			}
+		}
+
+
+};
+
+
+MyEventManager eventManager;
+
+
+
+
 
 void executeAction(int clientID, string message) {
 
 	//cout << "Player: " + to_string(players.at(clientID).clientID) + " - message: " + message << endl; 
+	//MyEvent(string type, int priority, int objectID, string objectType, string direction) 
 
-
-	if (message == "left") {
-		float oldX = players.at(clientID).getPosition().x; 
-		float newX = oldX - 0.1f;
-
-		players.at(clientID).setPosition(newX, players.at(clientID).getPosition().y);
-	}
-	else if (message == "right") {
-		float oldX = players.at(clientID).getPosition().x;
-		float newX = oldX + 0.1f;
-
-		players.at(clientID).setPosition(newX, players.at(clientID).getPosition().y);
-	}
-	else if (message == "up") {
-		float oldY = players.at(clientID).getPosition().y; 
-		float newY = oldY - 0.1f; 
-
-		players.at(clientID).setPosition(players.at(clientID).getPosition().x, newY);
-	}
-	else if (message == "down") {
-		float oldY = players.at(clientID).getPosition().y;
-		float newY = oldY + 0.1f;
-
-		players.at(clientID).setPosition(players.at(clientID).getPosition().x, newY);
-	}
-
-
+	MyEvent event("userInput", 2, clientID, "player", message);
+	eventManager.addEvent(event); 
 
 }
 
@@ -105,6 +251,15 @@ void pullThread()
 
 int main()
 {
+	MainEventHandler handler; 
+	
+	eventManager.registerHandler("userInput", handler); 
+	eventManager.registerHandler("death", handler);
+	eventManager.registerHandler("spawn", handler);
+	eventManager.registerHandler("collision", handler);
+	eventManager.registerHandler("startRecording", handler);
+	eventManager.registerHandler("stopRecording", handler);
+
 	// create default moving platform 
 	MovingPlatform movingPlatform(sf::Vector2f(120.f, 50.f));
 	movingPlatform.setSize(sf::Vector2f(100.f, 100.f));
@@ -131,6 +286,13 @@ int main()
 
 	while (1) {
 		Sleep(1); 
+
+		// handle user-related events 
+		eventManager.handleAllEvents();
+
+		// as the server, dictate the moving platforms 
+
+
 
 		if (!players.empty()) {
 
@@ -201,6 +363,9 @@ int main()
 	}
 
 	t1.join();
+
+
 	return 0; 
+
 }
 

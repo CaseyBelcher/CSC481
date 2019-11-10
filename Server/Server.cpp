@@ -11,9 +11,7 @@
 #include <queue> 
 
 
-#include "Player.cpp"
-#include "MovingPlatform.cpp"
-#include "Platform.cpp"
+#include "Events.cpp"
 
 using namespace std; 
 using json = nlohmann::json;
@@ -22,185 +20,177 @@ zmq::context_t context(1);
 map<int, Player> players;
 map<int, MovingPlatform> movingPlatforms; 
 map<int, Platform> platforms; 
-
-class MyEvent {
-	public: 
-		string type; 
-		int priority; 
-		int objectID; 
-		string objectType;
-		string direction; 
-
-		MyEvent(string type, int priority, int objectID, string objectType, string direction) {
-			this->type = type; 
-			this->priority = priority; 
-			this->objectID = objectID; 
-			this->objectType = objectType; 
-			this->direction = direction; 
-		}
-
-};
-
-class EventHandler {
-public:
-
-	EventHandler() {
-	}
-
-	virtual void onEvent(MyEvent e) = 0;
-
-};
-
-class MainEventHandler : EventHandler {
-	public:
-
-		void onEvent(MyEvent e) {
-			if (e.type == "collision") {
-
-			}
-			else if (e.type == "death") {
-
-			}
-			else if (e.type == "spawn") {
-
-			}
-			else if (e.type == "userInput") {
-
-				if (e.direction == "left") {
-					float oldX = players.at(e.objectID).getPosition().x;
-					float newX = oldX - 0.1f;
-
-					players.at(e.objectID).setPosition(newX, players.at(e.objectID).getPosition().y);
-				}
-				else if (e.direction == "right") {
-					float oldX = players.at(e.objectID).getPosition().x;
-					float newX = oldX + 0.1f;
-
-					players.at(e.objectID).setPosition(newX, players.at(e.objectID).getPosition().y);
-				}
-				else if (e.direction == "up") {
-					float oldY = players.at(e.objectID).getPosition().y;
-					float newY = oldY - 0.1f;
-
-					players.at(e.objectID).setPosition(players.at(e.objectID).getPosition().x, newY);
-				}
-				else if (e.direction == "down") {
-					float oldY = players.at(e.objectID).getPosition().y;
-					float newY = oldY + 0.1f;
-
-					players.at(e.objectID).setPosition(players.at(e.objectID).getPosition().x, newY);
-				}
-			}
-			else if (e.type == "startRecording") {
-
-			}
-			else if (e.type == "stopRecording") {
-
-			}
-		}
-};
-
-
-
-
-
-class MyEventManager {
-	public:
-		// <event type, list of handlers interested in that type> 
-		map<string, vector<MainEventHandler>> handlerMap; 
-		queue<MyEvent> firstEvents;
-		queue<MyEvent> secondEvents;
-
-
-		MyEventManager() {
-	
-		}
-	
-		// register an event handler for a type of event  
-		void registerHandler(string type, MainEventHandler handler) {
-			
-			map<string, vector<MainEventHandler>>::iterator it = handlerMap.find(type); 
-			
-			// if this event type not in map yet, add it 
-			if (it == handlerMap.end()) {
-				vector<MainEventHandler> handlers; 
-				handlers.push_back(handler); 
-				handlerMap.insert(pair<string, vector<MainEventHandler>>(type, handlers)); 
-			}
-			else {
-				handlerMap.at(type).push_back(handler);
-			}
-		}
-
-
-		void addEvent(MyEvent event) {
-			if (event.type != "") {
-
-
-
-				if (event.priority == 1) {
-					firstEvents.push(event);
-				}
-				else {
-					secondEvents.push(event);
-				}
-
-			}
-		}
-
-		void handleAllEvents() {
-
-			// go through first priority events first 
-			while (!firstEvents.empty()) {
-				
-				MyEvent thisEvent = firstEvents.front(); 
-				vector<MainEventHandler> handlerList = handlerMap.at(thisEvent.type); 
-				
-				// notify each registered handler about this event  
-				for (int i = 0; i < handlerList.size(); i++) {
-					handlerList.at(i).onEvent(thisEvent); 
-				}
-
-				firstEvents.pop(); 
-
-			}
-
-			// go through events of secondary priority 
-			while (!secondEvents.empty()) {
-
-				MyEvent thisEvent = secondEvents.front();
-				if (thisEvent.type != "") {
-
-					vector<MainEventHandler> handlerList = handlerMap.at(thisEvent.type);
-
-					// notify each registered handler about this event  
-					for (int i = 0; i < handlerList.size(); i++) {
-						handlerList.at(i).onEvent(thisEvent);
-					}
-
-				}
-
-				secondEvents.pop();
-
-			}
-		}
-
-
-};
-
+float spawnX = 100.f; 
+float spawnY = 100.f; 
+float windowWidth = 800.f; 
+float windowHeight = 600.f; 
+float verticalVelocity = 0.f; 
+float gravityPull = 5.f; 
 
 MyEventManager eventManager;
 
 
 
+void isCollidingIntoPlayer(string direction, int movingPlatformID, float stepSize) {
+	
+	map<int, Player>::iterator itr2;
+	for (itr2 = players.begin(); itr2 != players.end(); ++itr2) {
+
+		if (movingPlatforms.at(movingPlatformID).getGlobalBounds().intersects(itr2->second.getGlobalBounds())) {
+			MyEvent newEvent("collision", 1, itr2->second.clientID, "player", direction, stepSize);
+			eventManager.addEvent(newEvent);
+		}
+
+	}
+}
+
+void isColliding(string direction, int objectID, string objectType, float stepSize) {
+
+	// colliding with left of window 
+	if (players.at(objectID).getPosition().x <= 0) {
+		MyEvent event("collision", 1, objectID, "player", "left", stepSize);
+		eventManager.addEvent(event); 
+	}
+	// colliding with top of window 
+	if (players.at(objectID).getPosition().y <= 0) {
+		MyEvent event("collision", 1, objectID, "player", "up", stepSize);
+		eventManager.addEvent(event);
+
+	}
+	// colliding with right of window 
+	if (players.at(objectID).getPosition().x + players.at(objectID).getLocalBounds().width >= windowWidth) {
+		MyEvent event("collision", 1, objectID, "player", "right", stepSize);
+		eventManager.addEvent(event);
+
+	}
+	// colliding with bottom of window 
+	if (players.at(objectID).getPosition().y + players.at(objectID).getLocalBounds().height >= windowHeight) {
+		MyEvent event("collision", 1, objectID, "player", "down", stepSize);
+		eventManager.addEvent(event);
+
+	}
+	
+
+
+
+	// check if colliding with any of the moving platforms 
+	map<int, MovingPlatform>::iterator itr2;
+	for (itr2 = movingPlatforms.begin(); itr2 != movingPlatforms.end(); ++itr2) {
+
+		if (players.at(objectID).getGlobalBounds().intersects(itr2->second.getGlobalBounds())) {
+			MyEvent newEvent("collision", 1, objectID, objectType, direction, stepSize);
+			eventManager.addEvent(newEvent);
+		}
+
+	}
+
+	// check if colliding with any of the static platforms 
+	map<int, Platform>::iterator itr3;
+	for (itr3 = platforms.begin(); itr3 != platforms.end(); ++itr3) {
+
+		if (players.at(objectID).getGlobalBounds().intersects(itr3->second.getGlobalBounds())) {
+			if (itr3->second.type == "deathZone") {
+				MyEvent newEvent("death", 1, objectID, objectType, "", stepSize);
+				eventManager.addEvent(newEvent);
+			}
+			else {
+				MyEvent newEvent("collision", 1, objectID, objectType, direction, stepSize);
+				eventManager.addEvent(newEvent);
+			}
+		}
+
+	}
+
+	// TODO 
+	// maybe check with other players if this isn't too slow or complicated 
+
+}
+
+
+class MainEventHandler : public EventHandler {
+public:
+
+
+	MainEventHandler() : EventHandler() {
+
+	}
+
+	
+
+	//virtual void onEvent(MyEvent e) = 0;
+	void onEvent(MyEvent e) {
+		if (e.type == "collision") {
+
+			if (e.objectType == "player") {
+				if (e.direction == "left") {
+					players.at(e.objectID).move(e.stepSize, 0); 
+				}
+				if (e.direction == "right") {
+					players.at(e.objectID).move(e.stepSize, 0);
+				}
+				if (e.direction == "up") {
+					players.at(e.objectID).move(0, e.stepSize);
+				}
+				if (e.direction == "down") {
+					players.at(e.objectID).move(0, e.stepSize);
+				}
+			}
+
+			
+
+		}
+		else if (e.type == "death") {
+			MyEvent event("spawn", 1, e.objectID, "player", "", 0); 
+			eventManager.addEvent(event); 
+
+		}
+		else if (e.type == "spawn") {
+			players.at(e.objectID).setPosition(spawnX, spawnY);
+
+		}
+		else if (e.type == "userInput") {
+
+			if (e.direction == "left") {
+
+				players.at(e.objectID).move(-.1f, 0);
+				isColliding("left", e.objectID, e.objectType, +.1f);
+
+			}
+			else if (e.direction == "right") {
+
+				players.at(e.objectID).move(+.1f, 0);
+				isColliding("right", e.objectID, e.objectType, -.1f);
+
+			}
+			else if (e.direction == "up") {
+
+				// players.at(e.objectID).move(0, -.1f);
+				// isColliding("up", e.objectID, e.objectType);
+				verticalVelocity = -40; 
+
+
+			}
+			else if (e.direction == "down") {
+
+				//players.at(e.objectID).move(0, +.1f);
+				//isColliding("down", e.objectID, e.objectType, -.1f);
+
+			}
+		}
+		else if (e.type == "startRecording") {
+
+		}
+		else if (e.type == "stopRecording") {
+
+		}
+	}
+};
+
 
 
 void executeAction(int clientID, string message) {
 
-	//cout << "Player: " + to_string(players.at(clientID).clientID) + " - message: " + message << endl; 
-	//MyEvent(string type, int priority, int objectID, string objectType, string direction) 
-
-	MyEvent event("userInput", 2, clientID, "player", message);
+	MyEvent event("userInput", 2, clientID, "player", message, 0);
 	eventManager.addEvent(event); 
 
 }
@@ -251,8 +241,8 @@ void pullThread()
 
 int main()
 {
-	MainEventHandler handler; 
-	
+	MainEventHandler handler = MainEventHandler(); 
+
 	eventManager.registerHandler("userInput", handler); 
 	eventManager.registerHandler("death", handler);
 	eventManager.registerHandler("spawn", handler);
@@ -268,7 +258,7 @@ int main()
 	movingPlatforms.insert(pair<int, MovingPlatform>(movingPlatform.id, movingPlatform));
 
 	// create default platform 
-	Platform platform(sf::Vector2f(120.f, 250.f));
+	Platform platform(sf::Vector2f(120.f, 250.f), "platform");
 	platform.setSize(sf::Vector2f(100.f, 100.f));
 	platform.setPosition(20.f, 300.f);
 	platform.setFillColor(sf::Color::Blue);
@@ -277,6 +267,19 @@ int main()
 	platform.id = 1;
 	platforms.insert(pair<int, Platform>(platform.id, platform));
 
+
+	// create death zone?
+	Platform platform2(sf::Vector2f(200.f, 200.f), "deathZone");
+	platform2.setSize(sf::Vector2f(100.f, 100.f));
+	platform2.setPosition(700.f, 500.f);
+	platform2.setFillColor(sf::Color::Red);
+	platform2.setOutlineColor(sf::Color::White);
+	platform2.setOutlineThickness(5);
+	platform2.id = 2;
+	platforms.insert(pair<int, Platform>(platform2.id, platform2));
+
+
+
 	// start pull thread 
 	thread t1(pullThread);
 
@@ -284,14 +287,52 @@ int main()
 	zmq::socket_t publisher(context, ZMQ_PUB);
 	publisher.bind("tcp://*:5563");
 
+	bool movingLeft = false;
+	int stepsTaken = 0; 
 	while (1) {
 		Sleep(1); 
 
 		// handle user-related events  
 		eventManager.handleAllEvents();
 
-		// as the server, dictate the moving platforms 
 
+		// as the server, dictate the moving platforms 
+		if (movingLeft) {
+			for (int i = 0; i < 10; i++) {
+				movingPlatforms.at(1).move(-.05f, 0);
+				isCollidingIntoPlayer("right", 1, +.05f);
+				stepsTaken++;
+			}
+			if (stepsTaken >= 300) {
+				stepsTaken = 0;
+				movingLeft = false;
+			}
+		}
+		else {
+			for (int i = 0; i < 10; i++) {
+				movingPlatforms.at(1).move(+.05f, 0);
+				isCollidingIntoPlayer("left", 1, -.05f);
+				stepsTaken++;
+			}
+			if (stepsTaken >= 300) {
+				stepsTaken = 0;
+				movingLeft = true;
+			}
+		}
+
+
+		// apply verticalVelocity to all players 
+		map<int, Player>::iterator itr;
+		for (itr = players.begin(); itr != players.end(); ++itr) {
+
+			itr->second.move(0, verticalVelocity); 
+			isColliding("down", itr->second.clientID, "player", -verticalVelocity); 
+			verticalVelocity += gravityPull; 
+			if (verticalVelocity > gravityPull) {
+				verticalVelocity = gravityPull; 
+			}
+
+		}
 
 
 		if (!players.empty()) {
@@ -340,7 +381,8 @@ int main()
 				{
 					{"id", itr3->second.id},
 					{"xPosition", itr3->second.getPosition().x},
-					{"yPosition", itr3->second.getPosition().y}
+					{"yPosition", itr3->second.getPosition().y}, 
+					{"type", itr3->second.type}
 				};
 
 				platformsMessages.push_back(platformMessage);

@@ -31,6 +31,7 @@ zmq::context_t context(1);
 sf::RenderWindow window(sf::VideoMode(800, 600), "My window", sf::Style::Resize | sf::Style::Close);
 
 bool hasFocus = true; 
+bool upPressed = false;
 map<int, MovingPlatform> movingPlatforms;
 map<int, Platform> platforms; 
 map<int, Player> players; 
@@ -61,16 +62,17 @@ void pushThread(int clientID) {
 	sender.connect("tcp://localhost:5558");
 
 	bool firstConnection = true; 
+	json connectMessage =
+	{
+		{"clientID", clientID},
+		{"type", "firstConnection"},
+		{"timestamp", 666},
+		{"message", "connecting"}
+	};
+
 	while (window.isOpen()) {
 
 		// if this is our first time connecting, let server know to display us 
-		json connectMessage =
-		{
-			{"clientID", clientID},
-			{"type", "firstConnection"}, 
-			{"timestamp", 666}, 
-			{"message", "connecting"}
-		};
 		if (firstConnection) {
 			// cout << "connecting to server...." << endl; 
 			s_send(sender, connectMessage.dump());
@@ -106,7 +108,8 @@ void pushThread(int clientID) {
 				// cout << "message sent: " + userInput.dump() << endl;
 				s_send(sender, userInput.dump());
 			}
-			if (sf::Keyboard::isKeyPressed(sf::Keyboard::Up))
+			//if (sf::Keyboard::isKeyPressed(sf::Keyboard::Up))
+			if (upPressed)
 			{
 				json userInput =
 				{
@@ -116,8 +119,9 @@ void pushThread(int clientID) {
 					{"message", "up"},
 				};
 
-				// cout << "message sent: " + userInput.dump() << endl;
+				//cout << "message sent: " + userInput.dump() << endl;
 				s_send(sender, userInput.dump());
+				upPressed = false; 
 			}
 			if (sf::Keyboard::isKeyPressed(sf::Keyboard::Down))
 			{
@@ -230,6 +234,7 @@ int main()
 			int id = thisPlatform.at("id");
 			float newX = thisPlatform.at("xPosition");
 			float newY = thisPlatform.at("yPosition");
+			string type = thisPlatform.at("type"); 
 
 			map<int, Platform>::iterator it = platforms.find(id);
 
@@ -240,10 +245,31 @@ int main()
 			// Platform not found, create a new Platform 
 			else {
 
-				Platform platform(sf::Vector2f(120.f, 250.f));
-				platform.setSize(sf::Vector2f(100.f, 100.f));
+				cout << type << endl; 
+
+				float platX; 
+				float platY; 
+				float platwidth; 
+				float platheight; 
+				sf::Color color; 
+				if (type == "deathZone") {
+					platX = 200.f; 
+					platY = 200.f; 
+					platwidth = 100.f; 
+					platheight = 100.f;
+					color = sf::Color::Red; 
+				}
+				else {
+					platX = 120.f; 
+					platY = 250.f; 
+					platwidth = 100.f; 
+					platheight = 100.f;
+					color = sf::Color::Blue; 
+				}
+				Platform platform(sf::Vector2f(platX, platY));
+				platform.setSize(sf::Vector2f(platwidth, platheight));
 				platform.setPosition(newX, newY);
-				platform.setFillColor(sf::Color::Blue);
+				platform.setFillColor(color);
 				platform.setOutlineColor(sf::Color::White);
 				platform.setOutlineThickness(5);
 				platform.id = id;
@@ -266,6 +292,9 @@ int main()
 			}
 			else if (event.type == sf::Event::GainedFocus) {
 				hasFocus = true;
+			}
+			else if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Up) {
+				upPressed = true; 
 			}
 		}
 

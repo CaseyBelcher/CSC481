@@ -287,7 +287,7 @@ int main()
 	while (1) {
 		Sleep(1); 
 
-		// handle user-related events 
+		// handle user-related events  
 		eventManager.handleAllEvents();
 
 		// as the server, dictate the moving platforms 

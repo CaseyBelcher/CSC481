@@ -120,7 +120,7 @@ public:
 	//virtual void onEvent(MyEvent e) = 0;
 	void onEvent(MyEvent e) {
 		if (e.type == "collision") {
-
+			cout << "collision: " + e.direction << endl; 
 			if (e.objectType == "player") {
 				if (e.direction == "left") {
 					players.at(e.objectID).move(e.stepSize, 0); 

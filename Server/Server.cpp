@@ -12,23 +12,45 @@
 
 
 #include "Events.cpp"
+#include "TimeLine.cpp"
 
 using namespace std; 
 using json = nlohmann::json;
 
 zmq::context_t context(1);
+
 map<int, Player> players;
 map<int, MovingPlatform> movingPlatforms; 
 map<int, Platform> platforms; 
+
+map<int, Player> recordedPlayers;
+map<int, MovingPlatform> recordedMovingPlatforms;
+map<int, Platform> recordedPlatforms;
+
+map<int, Player> originalPlayers;
+map<int, MovingPlatform> originalMovingPlatforms;
+map<int, Platform> originalPlatforms;
+
+
 float spawnX = 100.f; 
 float spawnY = 100.f; 
 float windowWidth = 800.f; 
 float windowHeight = 600.f; 
+
 float verticalVelocity = 0.f; 
+float recordedVerticalVelocity; 
+float originalVerticalVelocity; 
+
 float gravityPull = 5.f; 
+bool currentlyRecording = false; 
+queue<MyEvent> recording; 
+ 
+bool currentlyPlaying = false;  
+ 
+
 
 MyEventManager eventManager;
-
+Gametime thisTime(1000); 
 
 
 void isCollidingIntoPlayer(string direction, int movingPlatformID, float stepSize) {
@@ -106,6 +128,13 @@ void isColliding(string direction, int objectID, string objectType, float stepSi
 
 }
 
+// for clearing the recording queue 
+void clearQueue(std::queue<MyEvent>& q)
+{
+	std::queue<MyEvent> empty;
+	std::swap(q, empty);
+}
+
 
 class MainEventHandler : public EventHandler {
 public:
@@ -120,7 +149,7 @@ public:
 	//virtual void onEvent(MyEvent e) = 0;
 	void onEvent(MyEvent e) {
 		if (e.type == "collision") {
-			cout << "collision: " + e.direction << endl; 
+			// cout << "collision: " + e.direction << endl; 
 			if (e.objectType == "player") {
 				if (e.direction == "left") {
 					players.at(e.objectID).move(e.stepSize, 0); 
@@ -149,6 +178,8 @@ public:
 
 		}
 		else if (e.type == "userInput") {
+
+			// players.at(e.objectID).lastPing = thisTime.getTime(); 
 
 			if (e.direction == "left") {
 
@@ -179,19 +210,98 @@ public:
 		}
 		else if (e.type == "startRecording") {
 
+			// clear previous recording
+			clearQueue(recording); 
+			recordedPlayers.clear(); 
+			recordedMovingPlatforms.clear(); 
+			recordedPlatforms.clear(); 
+
+			// store all platform, movingplatform, player positions, and velocity for recording 
+			recordedPlatforms = platforms; 
+			recordedMovingPlatforms = movingPlatforms; 
+			recordedPlayers = players; 
+			recordedVerticalVelocity = verticalVelocity; 
+			
+
+			/* 
+				- set flag for executeAction() to start recording all outgoing userInput 
+				  and ping Events
+				- DO NOT record events for start/stop recording
+				- Let engine re-generate collision, death, and spawn events 
+			*/ 
+			currentlyRecording = true; 
+
+
 		}
 		else if (e.type == "stopRecording") {
 
+			// set flag for executeAction() to stop recording all outgoing Events 
+			currentlyRecording = false; 
 		}
+		else if (e.type == "replayRecording") {
+
+			/* 
+				- main game loop now knows to check current time against timestamp of recorded events, 
+				  going through each one in the order it was raised
+				- this also stops getting new events from client 
+			*/ 
+			currentlyPlaying = true; 
+
+			// clear the event manager of any straggling client events 
+			eventManager.clearAllEvents(); 
+
+			// store all platform, movingplatform, and player positions for after playback 
+			originalPlayers = players; 
+			originalPlatforms = platforms; 
+			originalMovingPlatforms = movingPlatforms; 
+			originalVerticalVelocity = verticalVelocity; 
+			
+			// create everything as stored in recording 
+			// assumption: this also clears the left hand maps of their current values 
+			players = recordedPlayers; 
+			platforms = recordedPlatforms; 
+			movingPlatforms = recordedMovingPlatforms; 
+			verticalVelocity = recordedVerticalVelocity; 
+
+
+		}
+		else if (e.type == "replayFinished") {
+			
+			// restore the positions of everything 
+
+			// set currentlyPlaying flag to false 
+
+
+		} 
+		else if (e.type == "ping") {
+			players.at(e.objectID).lastPing = thisTime.getTime(); 
+
+		}
+
+
+
 	}
 };
 
 
 
-void executeAction(int clientID, string message) {
+void executeAction(int clientID, string message, string type) {
+	if (!currentlyPlaying) {
 
-	MyEvent event("userInput", 2, clientID, "player", message, 0);
-	eventManager.addEvent(event); 
+		MyEvent event(type, 2, clientID, "player", message, 0);
+		event.timestamp = thisTime.getTime();
+		eventManager.addEvent(event);
+
+		if ((event.type == "userInput" || event.type == "ping") 
+			&& currentlyRecording) {
+
+			recording.push(event);
+		
+		}
+	}
+
+	
+
 
 }
 
@@ -230,7 +340,8 @@ void pullThread()
 
 		// execute action for that player 
 		if (type != "firstConnection") {
-			executeAction(thisClientID, message);
+			executeAction(thisClientID, message, type);
+
 		}
 
 	}
@@ -292,6 +403,27 @@ int main()
 	while (1) {
 		Sleep(1); 
 
+		// - play recording by raising events 
+		// - if you reach the end of recording queue, playback is done
+		// - check current time against timestamp of recorded events, going through each one in the order 
+		//   it was raised
+		// - stop going through the map for this loop iteration when finding a later timestamp 
+		if (currentlyPlaying) {
+
+			int currentTime = thisTime.getTime(); 
+			while (!recording.empty()) {
+				
+				// if(currentTime >= recording.front().timestamp )
+				// above wont work because these two times are on different timelines 
+				// 
+				// TODO : MAKE THIS COMPARISON ON SAME TIMELINE 
+			}
+
+
+
+		}
+
+
 		// handle user-related events  
 		eventManager.handleAllEvents();
 
@@ -320,18 +452,30 @@ int main()
 			}
 		}
 
+		vector<int> playersToErase; 
 
 		// apply verticalVelocity to all players 
 		map<int, Player>::iterator itr;
-		for (itr = players.begin(); itr != players.end(); ++itr) {
-
-			itr->second.move(0, verticalVelocity); 
-			isColliding("down", itr->second.clientID, "player", -verticalVelocity); 
-			verticalVelocity += gravityPull; 
-			if (verticalVelocity > gravityPull) {
-				verticalVelocity = gravityPull; 
+		for (itr = players.begin(); itr != players.end(); ++itr ) {
+			
+			// if this player hasn't pinged in the last 3 seconds, remove them  
+			if ((thisTime.getTime() - 10) > (itr->second.lastPing)) {
+				//players.erase(itr++);
+				// cout << "ERASING PLAYER: " + to_string(itr->second.clientID) << endl; 
+				playersToErase.push_back(itr->first); 
 			}
+			else {
+				itr->second.move(0, verticalVelocity);
+				isColliding("down", itr->second.clientID, "player", -verticalVelocity);
+				verticalVelocity += gravityPull;
+				if (verticalVelocity > gravityPull) {
+					verticalVelocity = gravityPull;
+				}
+			}
+		}
 
+		for (int i = 0; i < playersToErase.size(); i++) {
+			players.erase(playersToErase.at(i)); 
 		}
 
 

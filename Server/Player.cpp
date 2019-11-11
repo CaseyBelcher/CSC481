@@ -9,6 +9,7 @@ class Player : public sf::CircleShape {
 public:
 
 	int clientID;
+	int lastPing = 0; 
 	Player(float num) : CircleShape(num) {
 		this->clientID = 0; 
 	}

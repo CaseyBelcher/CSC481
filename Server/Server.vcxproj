@@ -169,6 +169,7 @@
     <ClCompile Include="Platform.cpp" />
     <ClCompile Include="Player.cpp" />
     <ClCompile Include="Server.cpp" />
+    <ClCompile Include="TimeLine.cpp" />
     <ClCompile Include="zhelpers.hpp" />
   </ItemGroup>
   <ItemGroup>

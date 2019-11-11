@@ -1,4 +1,3 @@
-#include "TimeLine.h"
 #include <SFML/Graphics.hpp>
 #include <SFML/Window.hpp>
 #include <chrono>
@@ -49,7 +48,7 @@ public:
 		return paused;
 	}
 	void halfTime() {
-		this->step_size = 2*original_step_size;
+		this->step_size = 2 * original_step_size;
 	}
 	void oneTime() {
 		this->step_size = original_step_size;

@@ -15,7 +15,11 @@ using namespace std;
 
 
 
-
+void clearQueue(std::queue<MyEvent>& q)
+{
+	std::queue<MyEvent> empty;
+	std::swap(q, empty);
+}
 
 
 
@@ -29,6 +33,7 @@ public:
 	string objectType;
 	string direction;
 	float stepSize = 0; 
+	int timestamp; 
 
 	MyEvent(string type, int priority, int objectID, string objectType, string direction, float stepSize) {
 		this->type = type;
@@ -65,8 +70,15 @@ public:
 
 
 	MyEventManager() {
-
+		
 	}
+
+	// used during the start of a replay to eliminate straggling client events 
+	void clearAllEvents() {
+		clearQueue(firstEvents);
+		clearQueue(secondEvents);
+	}
+
 
 	// register an event handler for a type of event  
 	void registerHandler(string type, EventHandler &handler) {
@@ -116,7 +128,11 @@ public:
 				handlerList.at(i)->onEvent(thisEvent);
 			}
 
-			firstEvents.pop();
+			// worried about when the recording process clears this manager of events 
+			if (!firstEvents.empty()) {
+				firstEvents.pop();
+
+			}
 
 		}
 
@@ -135,7 +151,11 @@ public:
 
 			}
 
-			secondEvents.pop();
+			// worried about when the recording process clears this manager of events 
+			if (!secondEvents.empty()) {
+				secondEvents.pop();
+
+			}
 
 		}
 

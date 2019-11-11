@@ -35,27 +35,19 @@ bool upPressed = false;
 map<int, MovingPlatform> movingPlatforms;
 map<int, Platform> platforms; 
 map<int, Player> players; 
+Gametime thisTime(500); 
 
 
 
-
-
-void detectCollision(Player player, sf::FloatRect playerBound, sf::FloatRect platformBound, sf::FloatRect movingPlatformBound) {
-	if (playerBound.intersects(platformBound) || playerBound.intersects(movingPlatformBound)) {
-		player.setOutlineColor(sf::Color::Red);
-		player.setOutlineThickness(10);
-	}
-	else {
-		player.setOutlineColor(sf::Color::White);
-		player.setOutlineThickness(1);
-	}
-}
 
 
 /* 
 	Responsible for detecting user input and PUSHing to server
 */
 void pushThread(int clientID) {
+
+	// time to compare ping time to 
+	int lastTime = thisTime.getTime(); 
 
 	//  Prepare PUSH  
 	zmq::socket_t sender(context, ZMQ_PUSH);
@@ -66,7 +58,15 @@ void pushThread(int clientID) {
 	{
 		{"clientID", clientID},
 		{"type", "firstConnection"},
-		{"timestamp", 666},
+		{"timestamp", thisTime.getTime()},
+		{"message", "connecting"}
+	};
+
+	json pingMessage1 =
+	{
+		{"clientID", clientID},
+		{"type", "ping"},
+		{"timestamp", thisTime.getTime()},
 		{"message", "connecting"}
 	};
 
@@ -76,9 +76,25 @@ void pushThread(int clientID) {
 		if (firstConnection) {
 			// cout << "connecting to server...." << endl; 
 			s_send(sender, connectMessage.dump());
+			s_send(sender, pingMessage1.dump()); 
 			firstConnection = false;
 		}
 		
+		if (thisTime.getTime() >= (lastTime + 1)) {
+
+			json pingMessage2 =
+			{
+				{"clientID", clientID},
+				{"type", "ping"},
+				{"timestamp", thisTime.getTime()},
+				{"message", "connecting"}
+			};
+
+			// cout << "ping sent" << endl; 
+			s_send(sender, pingMessage2.dump());
+			lastTime = thisTime.getTime();
+		}
+
 		
 		if (hasFocus) {
 
@@ -88,7 +104,7 @@ void pushThread(int clientID) {
 				{
 					{"clientID", clientID},
 					{"type", "userInput"},
-					{"timestamp", 666},
+					{"timestamp", thisTime.getTime()},
 					{"message", "left"},  
 				};
 
@@ -101,7 +117,7 @@ void pushThread(int clientID) {
 				{
 					{"clientID", clientID},
 					{"type", "userInput"},
-					{"timestamp", 666},
+					{"timestamp", thisTime.getTime()},
 					{"message", "right"},
 				};
 
@@ -136,6 +152,7 @@ void pushThread(int clientID) {
 				// cout << "message sent: " + userInput.dump() << endl;
 				s_send(sender, userInput.dump());
 			}
+			
 
 
 		}
@@ -146,6 +163,7 @@ void pushThread(int clientID) {
 
 int main()
 {
+
 	// create player circle 
 	Player player(50.f);
 	player.setPosition(100.f, 100.f);
@@ -164,6 +182,8 @@ int main()
 
 
 	while (window.isOpen()) {
+
+		// cout << thisTime.getTime() << endl; 
 
 		//  get SUB message from Server  
 		std::string contents = s_recv(subscriber);
@@ -190,6 +210,7 @@ int main()
 			// player found 
 			if (it != players.end()) {
 				it->second.setPosition(newX, newY);
+				it->second.connected = true; 
 			}
 			// player not found, create a new player 
 			else {
@@ -197,6 +218,7 @@ int main()
 				newPlayer.setPosition(newX, newY);
 				newPlayer.setFillColor(sf::Color::Green);
 				newPlayer.clientID = id;
+				newPlayer.connected = true; 
 				players.insert(pair<int, Player>(newPlayer.clientID, newPlayer));
 			}
 		
@@ -245,7 +267,7 @@ int main()
 			// Platform not found, create a new Platform 
 			else {
 
-				cout << type << endl; 
+				// cout << type << endl; 
 
 				float platX; 
 				float platY; 
@@ -302,11 +324,25 @@ int main()
 		// clear the window with black color
 		window.clear(sf::Color::Black);
 
-		
+		vector<int> playersToRemove; 
+
 		// re-draw players  
 		map<int, Player>::iterator itr;
 		for (itr = players.begin(); itr != players.end(); ++itr) {
-			window.draw(itr->second);
+			if (itr->second.connected) {
+				window.draw(itr->second);
+				itr->second.connected = false;
+			}
+			// remove if not connected 
+			else {
+				playersToRemove.push_back(itr->first); 
+			}
+
+		}
+
+		// remove all non-connected players 
+		for (int i = 0; i < playersToRemove.size(); i++) {
+			players.erase(playersToRemove.at(i)); 
 		}
 
 		// re-draw moving platforms   

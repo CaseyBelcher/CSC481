@@ -36,7 +36,8 @@ map<int, MovingPlatform> movingPlatforms;
 map<int, Platform> platforms; 
 map<int, Player> players; 
 Gametime thisTime(500); 
-
+bool recording = false; 
+bool replaying = false; 
 
 
 
@@ -152,6 +153,85 @@ void pushThread(int clientID) {
 				// cout << "message sent: " + userInput.dump() << endl;
 				s_send(sender, userInput.dump());
 			}
+			if (sf::Keyboard::isKeyPressed(sf::Keyboard::Q))
+			{
+				json userInput =
+				{
+					{"clientID", clientID},
+					{"type", "startRecording"},
+					{"timestamp", 666},
+					{"message", "blah"},
+				};
+
+				// cout << "message sent: " + userInput.dump() << endl;
+				s_send(sender, userInput.dump());
+			}
+			if (sf::Keyboard::isKeyPressed(sf::Keyboard::W))
+			{
+				json userInput =
+				{
+					{"clientID", clientID},
+					{"type", "stopRecording"},
+					{"timestamp", 666},
+					{"message", "blah"},
+				};
+
+				// cout << "message sent: " + userInput.dump() << endl;
+				s_send(sender, userInput.dump());
+			}
+			if (sf::Keyboard::isKeyPressed(sf::Keyboard::P))
+			{
+				json userInput =
+				{
+					{"clientID", clientID},
+					{"type", "replayRecording"},
+					{"timestamp", 666},
+					{"message", "blah"},
+				};
+
+				// cout << "message sent: " + userInput.dump() << endl;
+				s_send(sender, userInput.dump());
+			}
+			if (sf::Keyboard::isKeyPressed(sf::Keyboard::Num1))
+			{
+				json userInput =
+				{
+					{"clientID", clientID},
+					{"type", "timeChange"},
+					{"timestamp", 666},
+					{"message", "normal"},
+				};
+
+				// cout << "message sent: " + userInput.dump() << endl;
+				s_send(sender, userInput.dump());
+			}
+			if (sf::Keyboard::isKeyPressed(sf::Keyboard::Num2))
+			{
+				json userInput =
+				{
+					{"clientID", clientID},
+					{"type", "timeChange"},
+					{"timestamp", 666},
+					{"message", "double"},
+				};
+
+				// cout << "message sent: " + userInput.dump() << endl;
+				s_send(sender, userInput.dump());
+			}
+			if (sf::Keyboard::isKeyPressed(sf::Keyboard::Num3))
+			{
+				json userInput =
+				{
+					{"clientID", clientID},
+					{"type", "timeChange"},
+					{"timestamp", 666},
+					{"message", "half"},
+				};
+
+				// cout << "message sent: " + userInput.dump() << endl;
+				s_send(sender, userInput.dump());
+			}
+			
 			
 
 
@@ -163,6 +243,40 @@ void pushThread(int clientID) {
 
 int main()
 {
+
+	Gametime testTime(1000); 
+
+	int lastTime = 0; 
+	while (1) {
+		cout << testTime.getTime() << endl; 
+
+		//int currentTime = testTime.getTime(); 
+		//if (currentTime >= lastTime + 1) {
+		//	cout << currentTime << endl;
+		//	lastTime = currentTime; 
+
+		//}
+
+		bool doublecalledOnce = false; 
+		if (sf::Keyboard::isKeyPressed(sf::Keyboard::Num2) && !doublecalledOnce) {
+			//cout << "double" << endl;
+			testTime.doubleTime(); 
+			doublecalledOnce = true; 
+		}
+		bool singlecalledOnce = false;
+		if (sf::Keyboard::isKeyPressed(sf::Keyboard::Num1) && !singlecalledOnce) {
+			//cout << "single" << endl;
+			testTime.oneTime();
+			singlecalledOnce = true;
+		}
+		bool halfCalledOnce = false;
+		if (sf::Keyboard::isKeyPressed(sf::Keyboard::Num3) && !halfCalledOnce) {
+			//cout << "half" << endl;
+			testTime.halfTime();
+			halfCalledOnce = true;
+		}
+
+	}
 
 	// create player circle 
 	Player player(50.f);
@@ -204,6 +318,8 @@ int main()
 			int id = thisPlayer.at("id"); 
 			float newX = thisPlayer.at("xPosition"); 
 			float newY = thisPlayer.at("yPosition"); 
+			recording = thisPlayer.at("recording"); 
+			replaying = thisPlayer.at("replaying"); 
 		
 			map<int, Player>::iterator it = players.find(id);
 
@@ -315,7 +431,7 @@ int main()
 			else if (event.type == sf::Event::GainedFocus) {
 				hasFocus = true;
 			}
-			else if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Up) {
+			else if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Up && hasFocus) {
 				upPressed = true; 
 			}
 		}
@@ -330,6 +446,7 @@ int main()
 		map<int, Player>::iterator itr;
 		for (itr = players.begin(); itr != players.end(); ++itr) {
 			if (itr->second.connected) {
+				itr->second.setFillColor(recording ? sf::Color::Blue : (replaying ? sf::Color::Red : sf::Color::Green)); 
 				window.draw(itr->second);
 				itr->second.connected = false;
 			}

@@ -10,8 +10,12 @@
 #include <nlohmann/json.hpp>
 #include <queue> 
 
+#include "Player.cpp"
+#include "MovingPlatform.cpp"
+#include "Platform.cpp"
 
-#include "Events.cpp"
+
+// #include "Events.cpp"
 #include "TimeLine.cpp"
 
 using namespace std; 
@@ -43,14 +47,185 @@ float originalVerticalVelocity;
 
 float gravityPull = 5.f; 
 bool currentlyRecording = false; 
-queue<MyEvent> recording; 
+int recordingStartTime; 
+int replayStartTime; 
+int timeoutSize = 10; 
  
 bool currentlyPlaying = false;  
  
 
 
-MyEventManager eventManager;
 Gametime thisTime(1000); 
+
+
+
+
+///////////////////////////////////////////////////////
+///////////////////////////////////////////////////////
+////////////////////////////////////////////////////////
+
+
+class MyEvent {
+public:
+	string type;
+	int priority;
+	int objectID;
+	string objectType;
+	string direction;
+	float stepSize = 0;
+	int timestamp;
+
+	MyEvent(string type, int priority, int objectID, string objectType, string direction, float stepSize) {
+		this->type = type;
+		this->priority = priority;
+		this->objectID = objectID;
+		this->objectType = objectType;
+		this->direction = direction;
+		this->stepSize = stepSize;
+	}
+
+};
+
+queue<MyEvent> recording;
+
+
+
+void clearQueueWhat(queue<MyEvent>& q)
+{
+	queue<MyEvent> empty;
+	swap(q, empty);
+}
+
+
+
+
+
+
+
+
+class EventHandler {
+public:
+
+	EventHandler() {
+	}
+
+	virtual void onEvent(MyEvent e) = 0;
+
+
+};
+
+
+
+class MyEventManager {
+public:
+	// <event type, list of handlers interested in that type> 
+	map<string, vector<EventHandler*>> handlerMap;
+	queue<MyEvent> firstEvents;
+	queue<MyEvent> secondEvents;
+
+
+	MyEventManager() {
+
+	}
+
+	// used during the start of a replay to eliminate straggling client events 
+	void clearAllEvents() {
+		clearQueueWhat(firstEvents);
+		clearQueueWhat(secondEvents);
+	}
+
+
+	// register an event handler for a type of event  
+	void registerHandler(string type, EventHandler& handler) {
+
+
+
+		map<string, vector<EventHandler*>>::iterator it = handlerMap.find(type);
+
+		// if this event type not in map yet, add it 
+		if (it == handlerMap.end()) {
+			vector<EventHandler*> handlers;
+			handlers.push_back(&handler);
+			handlerMap.insert(pair<string, vector<EventHandler*>>(type, handlers));
+		}
+		else {
+			handlerMap.at(type).push_back(&handler);
+		}
+	}
+
+
+	void addEvent(MyEvent event) {
+		if (event.type != "") {
+
+
+
+			if (event.priority == 1) {
+				firstEvents.push(event);
+			}
+			else {
+				secondEvents.push(event);
+			}
+
+		}
+	}
+
+	void handleAllEvents() {
+
+		// go through first priority events first 
+		while (!firstEvents.empty()) {
+
+			MyEvent thisEvent = firstEvents.front();
+			vector<EventHandler*> handlerList = handlerMap.at(thisEvent.type);
+
+			// notify each registered handler about this event  
+			for (int i = 0; i < handlerList.size(); i++) {
+				//handlerList.at(i)->onEvent
+				handlerList.at(i)->onEvent(thisEvent);
+			}
+
+			// worried about when the recording process clears this manager of events 
+			if (!firstEvents.empty()) {
+				firstEvents.pop();
+
+			}
+
+		}
+
+		// go through events of secondary priority 
+		while (!secondEvents.empty()) {
+
+			MyEvent thisEvent = secondEvents.front();
+			if (thisEvent.type != "") {
+
+				vector<EventHandler*> handlerList = handlerMap.at(thisEvent.type);
+
+				// notify each registered handler about this event  
+				for (int i = 0; i < handlerList.size(); i++) {
+					handlerList.at(i)->onEvent(thisEvent);
+				}
+
+			}
+
+			// worried about when the recording process clears this manager of events 
+			if (!secondEvents.empty()) {
+				secondEvents.pop();
+
+			}
+
+		}
+
+
+	}
+
+
+};
+
+MyEventManager eventManager;
+
+
+///////////////////////////////////////////////////////
+///////////////////////////////////////////////////////
+////////////////////////////////////////////////////////
 
 
 void isCollidingIntoPlayer(string direction, int movingPlatformID, float stepSize) {
@@ -129,11 +304,12 @@ void isColliding(string direction, int objectID, string objectType, float stepSi
 }
 
 // for clearing the recording queue 
-void clearQueue(std::queue<MyEvent>& q)
-{
-	std::queue<MyEvent> empty;
-	std::swap(q, empty);
-}
+// duplicated from Events.cpp I think.......
+//void clearQueue2(std::queue<MyEvent>& q)
+//{
+//	std::queue<MyEvent> empty;
+//	std::swap(q, empty);
+//}
 
 
 class MainEventHandler : public EventHandler {
@@ -210,27 +386,28 @@ public:
 		}
 		else if (e.type == "startRecording") {
 
-			// clear previous recording
-			clearQueue(recording); 
-			recordedPlayers.clear(); 
-			recordedMovingPlatforms.clear(); 
-			recordedPlatforms.clear(); 
+			if (!currentlyRecording) {
 
-			// store all platform, movingplatform, player positions, and velocity for recording 
-			recordedPlatforms = platforms; 
-			recordedMovingPlatforms = movingPlatforms; 
-			recordedPlayers = players; 
-			recordedVerticalVelocity = verticalVelocity; 
-			
+				// clear previous recording
+				clearQueueWhat(recording);
 
-			/* 
-				- set flag for executeAction() to start recording all outgoing userInput 
-				  and ping Events
-				- DO NOT record events for start/stop recording
-				- Let engine re-generate collision, death, and spawn events 
-			*/ 
-			currentlyRecording = true; 
+				// store all platform, movingplatform, player positions, velocity, and startTime for recording 
+				recordedPlatforms = platforms;
+				recordedMovingPlatforms = movingPlatforms;
+				recordedPlayers = players;
+				recordedVerticalVelocity = verticalVelocity;
+				recordingStartTime = thisTime.getTime();
 
+
+				/*
+					- set flag for executeAction() to start recording all outgoing userInput
+						and ping Events
+					- DO NOT record events for start/stop recording
+					- Let engine re-generate collision, death, and spawn events
+				*/
+				currentlyRecording = true;
+
+			} 
 
 		}
 		else if (e.type == "stopRecording") {
@@ -240,41 +417,69 @@ public:
 		}
 		else if (e.type == "replayRecording") {
 
-			/* 
-				- main game loop now knows to check current time against timestamp of recorded events, 
-				  going through each one in the order it was raised
-				- this also stops getting new events from client 
-			*/ 
-			currentlyPlaying = true; 
+			if (!currentlyPlaying) {
 
-			// clear the event manager of any straggling client events 
-			eventManager.clearAllEvents(); 
+				/*
+					- main game loop now knows to check current time against timestamp of recorded events,
+					  going through each one in the order it was raised
+					- this also stops getting new events from client
+				*/
+				currentlyPlaying = true;
+				replayStartTime = thisTime.getTime();
 
-			// store all platform, movingplatform, and player positions for after playback 
-			originalPlayers = players; 
-			originalPlatforms = platforms; 
-			originalMovingPlatforms = movingPlatforms; 
-			originalVerticalVelocity = verticalVelocity; 
-			
-			// create everything as stored in recording 
-			// assumption: this also clears the left hand maps of their current values 
-			players = recordedPlayers; 
-			platforms = recordedPlatforms; 
-			movingPlatforms = recordedMovingPlatforms; 
-			verticalVelocity = recordedVerticalVelocity; 
+				// clear the event manager of any straggling client events 
+				eventManager.clearAllEvents();
 
+				// store all platform, movingplatform, and player positions for after playback 
+				originalPlayers = players;
+				originalPlatforms = platforms;
+				originalMovingPlatforms = movingPlatforms;
+				originalVerticalVelocity = verticalVelocity;
+
+				// create everything as stored in recording 
+				players = recordedPlayers;
+				platforms = recordedPlatforms;
+				movingPlatforms = recordedMovingPlatforms;
+				verticalVelocity = recordedVerticalVelocity;
+
+			} 
 
 		}
 		else if (e.type == "replayFinished") {
 			
-			// restore the positions of everything 
+			cout << "replay has Finished" << endl;
 
-			// set currentlyPlaying flag to false 
+
+			// restore the state of everything as before the recording 
+			players = originalPlayers; 
+			movingPlatforms = originalMovingPlatforms; 
+			platforms = originalPlatforms; 
+			verticalVelocity = originalVerticalVelocity; 
+			thisTime.oneTime(); 
+
+			// just to be safe, clear the event manager of any straggling recording events 
+			eventManager.clearAllEvents();
+
+			// set currentlyPlaying flag to false; start receiving client input again 
+			currentlyPlaying = false; 
 
 
 		} 
 		else if (e.type == "ping") {
 			players.at(e.objectID).lastPing = thisTime.getTime(); 
+
+		}
+		else if (e.type == "timeChange") {
+			
+			if (e.direction == "normal") {
+				thisTime.oneTime(); 
+			}
+			else if (e.direction == "double") {
+				thisTime.doubleTime(); 
+			}
+			else if (e.direction == "half") {
+				thisTime.halfTime(); 
+			}
 
 		}
 
@@ -292,8 +497,8 @@ void executeAction(int clientID, string message, string type) {
 		event.timestamp = thisTime.getTime();
 		eventManager.addEvent(event);
 
-		if ((event.type == "userInput" || event.type == "ping") 
-			&& currentlyRecording) {
+		if (currentlyRecording &&
+		   (event.type == "userInput" || event.type == "ping")) {
 
 			recording.push(event);
 		
@@ -360,6 +565,10 @@ int main()
 	eventManager.registerHandler("collision", handler);
 	eventManager.registerHandler("startRecording", handler);
 	eventManager.registerHandler("stopRecording", handler);
+	eventManager.registerHandler("ping", handler);
+	eventManager.registerHandler("replayRecording", handler);
+	eventManager.registerHandler("replayFinished", handler);
+	eventManager.registerHandler("timeChange", handler); 
 
 	// create default moving platform 
 	MovingPlatform movingPlatform(sf::Vector2f(120.f, 50.f));
@@ -400,7 +609,15 @@ int main()
 
 	bool movingLeft = false;
 	int stepsTaken = 0; 
+	int theLastTime = 0; 
 	while (1) {
+
+		int theCurrentTime = thisTime.getTime(); 
+		if (theCurrentTime >= theLastTime + 1) {
+			cout << thisTime.getTime() << endl;
+			theLastTime = theCurrentTime; 
+		}
+
 		Sleep(1); 
 
 		// - play recording by raising events 
@@ -412,11 +629,31 @@ int main()
 
 			int currentTime = thisTime.getTime(); 
 			while (!recording.empty()) {
+				MyEvent recEvent = recording.front(); 
 				
-				// if(currentTime >= recording.front().timestamp )
-				// above wont work because these two times are on different timelines 
-				// 
-				// TODO : MAKE THIS COMPARISON ON SAME TIMELINE 
+				if ((currentTime - replayStartTime) >= (recording.front().timestamp - recordingStartTime)) {
+					
+					recEvent.timestamp = currentTime; 
+					eventManager.addEvent(recEvent); 
+					recording.pop();
+				}
+				else {
+					break; 
+				}
+			}
+
+			if (recording.empty()) {
+				cout << "recording empty..." << endl; 
+
+				//MyEvent thisEv("replayFinished", 1, 0, 0, "", 0); 
+				MyEvent whatever("replayFinished", 1, 10, "blah", "blah", 2); 
+				
+				cout << "here 1..." << endl;
+
+				eventManager.addEvent(whatever); 
+
+				cout << "here 2..." << endl;
+
 			}
 
 
@@ -458,8 +695,13 @@ int main()
 		map<int, Player>::iterator itr;
 		for (itr = players.begin(); itr != players.end(); ++itr ) {
 			
+			//bool realTimeComparison = (thisTime.getTime() - timeoutSize) > (itr->second.lastPing); 
+			
+			//bool replayTimeComparison = 
+
+
 			// if this player hasn't pinged in the last 3 seconds, remove them  
-			if ((thisTime.getTime() - 10) > (itr->second.lastPing)) {
+			if ((thisTime.getTime() - timeoutSize) > (itr->second.lastPing)) {
 				//players.erase(itr++);
 				// cout << "ERASING PLAYER: " + to_string(itr->second.clientID) << endl; 
 				playersToErase.push_back(itr->first); 
@@ -495,7 +737,9 @@ int main()
 				{
 					{"id", itr->second.clientID},
 					{"xPosition", itr->second.getPosition().x},
-					{"yPosition", itr->second.getPosition().y}
+					{"yPosition", itr->second.getPosition().y}, 
+					{"recording", currentlyRecording}, 
+					{"replaying", currentlyPlaying}
 				};
 				
 				playersMessages.push_back(playersMessage); 

@@ -44,14 +44,17 @@ float windowHeight = 600.f;
 float verticalVelocity = 0.f; 
 float recordedVerticalVelocity; 
 float originalVerticalVelocity; 
+float jumpVelocity = -20.f; 
 
-float gravityPull = 5.f; 
+float gravityPull = 1.f; 
 bool currentlyRecording = false; 
 int recordingStartTime; 
 int replayStartTime; 
 int timeoutSize = 10; 
  
 bool currentlyPlaying = false;  
+
+float LeftRightspeed = .1f; 
  
 
 
@@ -243,9 +246,12 @@ void isCollidingIntoPlayer(string direction, int movingPlatformID, float stepSiz
 
 void isColliding(string direction, int objectID, string objectType, float stepSize) {
 
+	// cout << "isColliding with stepSize: " + to_string(stepSize) << endl; 
+
 	// colliding with left of window 
 	if (players.at(objectID).getPosition().x <= 0) {
-		MyEvent event("collision", 1, objectID, "player", "left", stepSize);
+		// cout << "colliding left window - stepSize = " + to_string(stepSize) << endl; 
+		MyEvent event("collision", 1, objectID, "player", "left", +LeftRightspeed);
 		eventManager.addEvent(event); 
 	}
 	// colliding with top of window 
@@ -256,7 +262,7 @@ void isColliding(string direction, int objectID, string objectType, float stepSi
 	}
 	// colliding with right of window 
 	if (players.at(objectID).getPosition().x + players.at(objectID).getLocalBounds().width >= windowWidth) {
-		MyEvent event("collision", 1, objectID, "player", "right", stepSize);
+		MyEvent event("collision", 1, objectID, "player", "right", -LeftRightspeed);
 		eventManager.addEvent(event);
 
 	}
@@ -328,6 +334,7 @@ public:
 			// cout << "collision: " + e.direction << endl; 
 			if (e.objectType == "player") {
 				if (e.direction == "left") {
+					//cout << "collision left - e.stepSize = " + to_string(e.stepSize) << endl; 
 					players.at(e.objectID).move(e.stepSize, 0); 
 				}
 				if (e.direction == "right") {
@@ -359,13 +366,13 @@ public:
 
 			if (e.direction == "left") {
 
-				players.at(e.objectID).move(-.1f, 0);
+				players.at(e.objectID).move(-LeftRightspeed, 0);
 				isColliding("left", e.objectID, e.objectType, +.1f);
 
 			}
 			else if (e.direction == "right") {
 
-				players.at(e.objectID).move(+.1f, 0);
+				players.at(e.objectID).move(+LeftRightspeed, 0);
 				isColliding("right", e.objectID, e.objectType, -.1f);
 
 			}
@@ -373,7 +380,7 @@ public:
 
 				// players.at(e.objectID).move(0, -.1f);
 				// isColliding("up", e.objectID, e.objectType);
-				verticalVelocity = -40; 
+				verticalVelocity = jumpVelocity; 
 
 
 			}
@@ -570,12 +577,19 @@ int main()
 	eventManager.registerHandler("replayFinished", handler);
 	eventManager.registerHandler("timeChange", handler); 
 
-	// create default moving platform 
+	// create moving platform 1  
 	MovingPlatform movingPlatform(sf::Vector2f(120.f, 50.f));
 	movingPlatform.setSize(sf::Vector2f(100.f, 100.f));
-	movingPlatform.setPosition(300.f, 300.f);
+	movingPlatform.setPosition(300.f, 450.f);
 	movingPlatform.id = 1;
 	movingPlatforms.insert(pair<int, MovingPlatform>(movingPlatform.id, movingPlatform));
+
+	// create moving platform 2  
+	MovingPlatform movingPlatform2(sf::Vector2f(120.f, 50.f));
+	movingPlatform2.setSize(sf::Vector2f(100.f, 100.f));
+	movingPlatform2.setPosition(300.f, 200.f);
+	movingPlatform2.id = 2;
+	movingPlatforms.insert(pair<int, MovingPlatform>(movingPlatform2.id, movingPlatform2));
 
 	// create default platform 
 	Platform platform(sf::Vector2f(120.f, 250.f), "platform");
@@ -588,7 +602,7 @@ int main()
 	platforms.insert(pair<int, Platform>(platform.id, platform));
 
 
-	// create death zone?
+	// create death zone
 	Platform platform2(sf::Vector2f(200.f, 200.f), "deathZone");
 	platform2.setSize(sf::Vector2f(100.f, 100.f));
 	platform2.setPosition(700.f, 500.f);
@@ -669,10 +683,13 @@ int main()
 		if (movingLeft) {
 			for (int i = 0; i < 10; i++) {
 				movingPlatforms.at(1).move(-.05f, 0);
-				isCollidingIntoPlayer("right", 1, +.05f);
+				isCollidingIntoPlayer("left", 1, -.05f);
+
+				movingPlatforms.at(2).move(0, +.05f); 
+				isCollidingIntoPlayer("down", 2, +.05f); 
 				stepsTaken++;
 			}
-			if (stepsTaken >= 300) {
+			if (stepsTaken >= 1300) {
 				stepsTaken = 0;
 				movingLeft = false;
 			}
@@ -680,10 +697,13 @@ int main()
 		else {
 			for (int i = 0; i < 10; i++) {
 				movingPlatforms.at(1).move(+.05f, 0);
-				isCollidingIntoPlayer("left", 1, -.05f);
+				isCollidingIntoPlayer("right", 1, +.05f);
+
+				movingPlatforms.at(2).move(0, -.05f);
+				isCollidingIntoPlayer("up", 2, -.05f);
 				stepsTaken++;
 			}
-			if (stepsTaken >= 300) {
+			if (stepsTaken >= 1300) {
 				stepsTaken = 0;
 				movingLeft = true;
 			}
@@ -694,16 +714,10 @@ int main()
 		// apply verticalVelocity to all players 
 		map<int, Player>::iterator itr;
 		for (itr = players.begin(); itr != players.end(); ++itr ) {
-			
-			//bool realTimeComparison = (thisTime.getTime() - timeoutSize) > (itr->second.lastPing); 
-			
-			//bool replayTimeComparison = 
-
 
 			// if this player hasn't pinged in the last 3 seconds, remove them  
 			if ((thisTime.getTime() - timeoutSize) > (itr->second.lastPing)) {
-				//players.erase(itr++);
-				// cout << "ERASING PLAYER: " + to_string(itr->second.clientID) << endl; 
+
 				playersToErase.push_back(itr->first); 
 			}
 			else {

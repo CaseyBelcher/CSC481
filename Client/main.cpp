@@ -244,39 +244,41 @@ void pushThread(int clientID) {
 int main()
 {
 
-	Gametime testTime(1000); 
+	//Gametime testTime(1000); 
 
-	int lastTime = 0; 
-	while (1) {
-		cout << testTime.getTime() << endl; 
+	//int lastTime = 0; 
+	//while (1) {
+	//	cout << testTime.getTime() << endl; 
 
-		//int currentTime = testTime.getTime(); 
-		//if (currentTime >= lastTime + 1) {
-		//	cout << currentTime << endl;
-		//	lastTime = currentTime; 
+	//	// testTime.getTime(); 
 
-		//}
+	//	//int currentTime = testTime.getTime(); 
+	//	//if (currentTime >= lastTime + 1) {
+	//	//	cout << currentTime << endl;
+	//	//	lastTime = currentTime; 
 
-		bool doublecalledOnce = false; 
-		if (sf::Keyboard::isKeyPressed(sf::Keyboard::Num2) && !doublecalledOnce) {
-			//cout << "double" << endl;
-			testTime.doubleTime(); 
-			doublecalledOnce = true; 
-		}
-		bool singlecalledOnce = false;
-		if (sf::Keyboard::isKeyPressed(sf::Keyboard::Num1) && !singlecalledOnce) {
-			//cout << "single" << endl;
-			testTime.oneTime();
-			singlecalledOnce = true;
-		}
-		bool halfCalledOnce = false;
-		if (sf::Keyboard::isKeyPressed(sf::Keyboard::Num3) && !halfCalledOnce) {
-			//cout << "half" << endl;
-			testTime.halfTime();
-			halfCalledOnce = true;
-		}
+	//	//}
 
-	}
+	//	bool doublecalledOnce = false; 
+	//	if (sf::Keyboard::isKeyPressed(sf::Keyboard::Num2) && !doublecalledOnce) {
+	//		//cout << "double" << endl;
+	//		testTime.doubleTime(); 
+	//		doublecalledOnce = true; 
+	//	}
+	//	bool singlecalledOnce = false;
+	//	if (sf::Keyboard::isKeyPressed(sf::Keyboard::Num1) && !singlecalledOnce) {
+	//		//cout << "single" << endl;
+	//		testTime.oneTime();
+	//		singlecalledOnce = true;
+	//	}
+	//	bool halfCalledOnce = false;
+	//	if (sf::Keyboard::isKeyPressed(sf::Keyboard::Num3) && !halfCalledOnce) {
+	//		//cout << "half" << endl;
+	//		testTime.halfTime();
+	//		halfCalledOnce = true;
+	//	}
+
+	//}
 
 	// create player circle 
 	Player player(50.f);

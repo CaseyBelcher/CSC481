@@ -16,8 +16,9 @@ private:
 	milliseconds start_time;
 	int original_step_size;
 	int step_size;
-	bool paused = false;
 	milliseconds ea;
+	milliseconds lastTimeMarker;
+	int runningTotal;
 
 public:
 	Gametime(int step_size) {
@@ -25,28 +26,25 @@ public:
 		this->original_step_size = step_size;
 		time_point<system_clock> epoch;
 		this->start_time = duration_cast<milliseconds>(system_clock::now() - epoch);
+		this->lastTimeMarker = start_time;
+		this->runningTotal = 0;
 	}
 
 	int getTime() {
-		if (!paused) {
-			time_point<system_clock> epoch;
-			milliseconds now = duration_cast<milliseconds>(system_clock::now() - epoch);
-			this->ea = now - (this->start_time);
-		}
+
+		time_point<system_clock> epoch;
+		milliseconds now = duration_cast<milliseconds>(system_clock::now() - epoch);
+		this->ea = now - (this->lastTimeMarker);
+
 		int elapsed = (int)ea.count() / step_size;
-		return elapsed;
-
+		runningTotal += elapsed;
+		if (elapsed >= 1) {
+			this->lastTimeMarker = now;
+		}
+		return runningTotal;
 	}
 
-	void pause() {
-		this->paused = true;
-	}
-	void unPause() {
-		this->paused = false;
-	}
-	bool isPaused() {
-		return paused;
-	}
+
 	void halfTime() {
 		this->step_size = 2 * original_step_size;
 	}

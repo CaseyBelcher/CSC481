@@ -17,11 +17,7 @@
 
 using namespace std::chrono; 
 using namespace std; 
-// for convenience
 using json = nlohmann::json;
-
-
-
 
 
 //  Prepare our context
@@ -38,7 +34,6 @@ map<int, Player> players;
 Gametime thisTime(500); 
 bool recording = false; 
 bool replaying = false; 
-
 
 
 
@@ -59,7 +54,6 @@ void pushThread(int clientID) {
 	{
 		{"clientID", clientID},
 		{"type", "firstConnection"},
-		{"timestamp", thisTime.getTime()},
 		{"message", "connecting"}
 	};
 
@@ -67,7 +61,6 @@ void pushThread(int clientID) {
 	{
 		{"clientID", clientID},
 		{"type", "ping"},
-		{"timestamp", thisTime.getTime()},
 		{"message", "connecting"}
 	};
 
@@ -75,7 +68,6 @@ void pushThread(int clientID) {
 
 		// if this is our first time connecting, let server know to display us 
 		if (firstConnection) {
-			// cout << "connecting to server...." << endl; 
 			s_send(sender, connectMessage.dump());
 			s_send(sender, pingMessage1.dump()); 
 			firstConnection = false;
@@ -87,11 +79,9 @@ void pushThread(int clientID) {
 			{
 				{"clientID", clientID},
 				{"type", "ping"},
-				{"timestamp", thisTime.getTime()},
 				{"message", "connecting"}
 			};
 
-			// cout << "ping sent" << endl; 
 			s_send(sender, pingMessage2.dump());
 			lastTime = thisTime.getTime();
 		}
@@ -105,11 +95,9 @@ void pushThread(int clientID) {
 				{
 					{"clientID", clientID},
 					{"type", "userInput"},
-					{"timestamp", thisTime.getTime()},
 					{"message", "left"},  
 				};
 
-				// cout << "message sent: " + userInput.dump() << endl;
 				s_send(sender, userInput.dump());
 			}
 			if (sf::Keyboard::isKeyPressed(sf::Keyboard::Right))
@@ -118,52 +106,49 @@ void pushThread(int clientID) {
 				{
 					{"clientID", clientID},
 					{"type", "userInput"},
-					{"timestamp", thisTime.getTime()},
 					{"message", "right"},
 				};
 
-				// cout << "message sent: " + userInput.dump() << endl;
 				s_send(sender, userInput.dump());
 			}
-			//if (sf::Keyboard::isKeyPressed(sf::Keyboard::Up))
 			if (upPressed)
 			{
-				json userInput =
-				{
-					{"clientID", clientID},
-					{"type", "userInput"},
-					{"timestamp", 666},
-					{"message", "up"},
-				};
+				if (hasFocus) {
+					json userInput =
+					{
+						{"clientID", clientID},
+						{"type", "userInput"},
+						{"message", "up"},
+					};
 
-				//cout << "message sent: " + userInput.dump() << endl;
-				s_send(sender, userInput.dump());
-				upPressed = false; 
+					s_send(sender, userInput.dump());
+					upPressed = false;
+				}
 			}
-			if (sf::Keyboard::isKeyPressed(sf::Keyboard::Down))
+			/*if (sf::Keyboard::isKeyPressed(sf::Keyboard::Up))
 			{
-				json userInput =
-				{
-					{"clientID", clientID},
-					{"type", "userInput"},
-					{"timestamp", 666},
-					{"message", "down"},
-				};
+				if (hasFocus) {
+					json userInput =
+					{
+						{"clientID", clientID},
+						{"type", "userInput"},
+						{"timestamp", 666},
+						{"message", "up"},
+					};
 
-				// cout << "message sent: " + userInput.dump() << endl;
-				s_send(sender, userInput.dump());
-			}
+					s_send(sender, userInput.dump());
+					upPressed = false;
+				}
+			}*/
 			if (sf::Keyboard::isKeyPressed(sf::Keyboard::Q))
 			{
 				json userInput =
 				{
 					{"clientID", clientID},
 					{"type", "startRecording"},
-					{"timestamp", 666},
 					{"message", "blah"},
 				};
 
-				// cout << "message sent: " + userInput.dump() << endl;
 				s_send(sender, userInput.dump());
 			}
 			if (sf::Keyboard::isKeyPressed(sf::Keyboard::W))
@@ -172,11 +157,9 @@ void pushThread(int clientID) {
 				{
 					{"clientID", clientID},
 					{"type", "stopRecording"},
-					{"timestamp", 666},
 					{"message", "blah"},
 				};
 
-				// cout << "message sent: " + userInput.dump() << endl;
 				s_send(sender, userInput.dump());
 			}
 			if (sf::Keyboard::isKeyPressed(sf::Keyboard::P))
@@ -185,11 +168,9 @@ void pushThread(int clientID) {
 				{
 					{"clientID", clientID},
 					{"type", "replayRecording"},
-					{"timestamp", 666},
 					{"message", "blah"},
 				};
 
-				// cout << "message sent: " + userInput.dump() << endl;
 				s_send(sender, userInput.dump());
 			}
 			if (sf::Keyboard::isKeyPressed(sf::Keyboard::Num1))
@@ -198,11 +179,9 @@ void pushThread(int clientID) {
 				{
 					{"clientID", clientID},
 					{"type", "timeChange"},
-					{"timestamp", 666},
 					{"message", "normal"},
 				};
 
-				// cout << "message sent: " + userInput.dump() << endl;
 				s_send(sender, userInput.dump());
 			}
 			if (sf::Keyboard::isKeyPressed(sf::Keyboard::Num2))
@@ -211,11 +190,9 @@ void pushThread(int clientID) {
 				{
 					{"clientID", clientID},
 					{"type", "timeChange"},
-					{"timestamp", 666},
 					{"message", "double"},
 				};
 
-				// cout << "message sent: " + userInput.dump() << endl;
 				s_send(sender, userInput.dump());
 			}
 			if (sf::Keyboard::isKeyPressed(sf::Keyboard::Num3))
@@ -224,11 +201,9 @@ void pushThread(int clientID) {
 				{
 					{"clientID", clientID},
 					{"type", "timeChange"},
-					{"timestamp", 666},
 					{"message", "half"},
 				};
 
-				// cout << "message sent: " + userInput.dump() << endl;
 				s_send(sender, userInput.dump());
 			}
 			
@@ -243,42 +218,6 @@ void pushThread(int clientID) {
 
 int main()
 {
-
-	//Gametime testTime(1000); 
-
-	//int lastTime = 0; 
-	//while (1) {
-	//	cout << testTime.getTime() << endl; 
-
-	//	// testTime.getTime(); 
-
-	//	//int currentTime = testTime.getTime(); 
-	//	//if (currentTime >= lastTime + 1) {
-	//	//	cout << currentTime << endl;
-	//	//	lastTime = currentTime; 
-
-	//	//}
-
-	//	bool doublecalledOnce = false; 
-	//	if (sf::Keyboard::isKeyPressed(sf::Keyboard::Num2) && !doublecalledOnce) {
-	//		//cout << "double" << endl;
-	//		testTime.doubleTime(); 
-	//		doublecalledOnce = true; 
-	//	}
-	//	bool singlecalledOnce = false;
-	//	if (sf::Keyboard::isKeyPressed(sf::Keyboard::Num1) && !singlecalledOnce) {
-	//		//cout << "single" << endl;
-	//		testTime.oneTime();
-	//		singlecalledOnce = true;
-	//	}
-	//	bool halfCalledOnce = false;
-	//	if (sf::Keyboard::isKeyPressed(sf::Keyboard::Num3) && !halfCalledOnce) {
-	//		//cout << "half" << endl;
-	//		testTime.halfTime();
-	//		halfCalledOnce = true;
-	//	}
-
-	//}
 
 	// create player circle 
 	Player player(50.f);
@@ -299,14 +238,10 @@ int main()
 
 	while (window.isOpen()) {
 
-		// cout << thisTime.getTime() << endl; 
-
 		//  get SUB message from Server  
 		std::string contents = s_recv(subscriber);
-		//std::cout << "contents: " + contents << std::endl;
 
 		// Parse message 
-		
 		json subMessage = json::parse(contents); 
 
 		vector<json> playersList = subMessage.at(0); 
@@ -384,8 +319,6 @@ int main()
 			}
 			// Platform not found, create a new Platform 
 			else {
-
-				// cout << type << endl; 
 
 				float platX; 
 				float platY; 

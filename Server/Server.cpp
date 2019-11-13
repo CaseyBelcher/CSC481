@@ -126,8 +126,15 @@ public:
 	queue<MyEvent> firstEvents;
 	queue<MyEvent> secondEvents;
 
-
 	MyEventManager() {
+		// add all event types we expect to handle as keys in the handlerMap 
+		vector<string> eventStrings = { "userInput", "death", "spawn", "collision", "startRecording",
+			"stopRecording", "ping", "replayRecording", "replayFinished", "timeChange" };
+		vector<EventHandler*> handlers;
+		for (int i = 0; i < eventStrings.size(); i++) {
+			handlerMap.insert(pair<string, vector<EventHandler*>>(eventStrings.at(i), handlers));
+		}
+
 
 	}
 
@@ -141,15 +148,21 @@ public:
 	// register an event handler for a type of event  
 	void registerHandler(string type, EventHandler& handler) {
 
-
-
 		map<string, vector<EventHandler*>>::iterator it = handlerMap.find(type);
 
-		// if this event type not in map yet, add it 
+		// if this event type not in map yet, either add it or check for wildcard  
 		if (it == handlerMap.end()) {
-			vector<EventHandler*> handlers;
-			handlers.push_back(&handler);
-			handlerMap.insert(pair<string, vector<EventHandler*>>(type, handlers));
+			// wildcard; register handler for all event types 
+			if (type == "all") {
+				for (it = handlerMap.begin(); it != handlerMap.end(); ++it) {
+					it->second.push_back(&handler); 
+				}
+			}
+			else {
+				vector<EventHandler*> handlers;
+				handlers.push_back(&handler);
+				handlerMap.insert(pair<string, vector<EventHandler*>>(type, handlers));
+			}
 		}
 		else {
 			handlerMap.at(type).push_back(&handler);
@@ -246,11 +259,8 @@ void isCollidingIntoPlayer(string direction, int movingPlatformID, float stepSiz
 
 void isColliding(string direction, int objectID, string objectType, float stepSize) {
 
-	// cout << "isColliding with stepSize: " + to_string(stepSize) << endl; 
-
 	// colliding with left of window 
 	if (players.at(objectID).getPosition().x <= 0) {
-		// cout << "colliding left window - stepSize = " + to_string(stepSize) << endl; 
 		MyEvent event("collision", 1, objectID, "player", "left", +LeftRightspeed);
 		eventManager.addEvent(event); 
 	}
@@ -258,24 +268,19 @@ void isColliding(string direction, int objectID, string objectType, float stepSi
 	if (players.at(objectID).getPosition().y <= 0) {
 		MyEvent event("collision", 1, objectID, "player", "up", stepSize);
 		eventManager.addEvent(event);
-
 	}
 	// colliding with right of window 
 	if (players.at(objectID).getPosition().x + players.at(objectID).getLocalBounds().width >= windowWidth) {
 		MyEvent event("collision", 1, objectID, "player", "right", -LeftRightspeed);
 		eventManager.addEvent(event);
-
 	}
 	// colliding with bottom of window 
 	if (players.at(objectID).getPosition().y + players.at(objectID).getLocalBounds().height >= windowHeight) {
 		MyEvent event("collision", 1, objectID, "player", "down", stepSize);
 		eventManager.addEvent(event);
-
 	}
 	
-
-
-
+	
 	// check if colliding with any of the moving platforms 
 	map<int, MovingPlatform>::iterator itr2;
 	for (itr2 = movingPlatforms.begin(); itr2 != movingPlatforms.end(); ++itr2) {
@@ -304,37 +309,20 @@ void isColliding(string direction, int objectID, string objectType, float stepSi
 
 	}
 
-	// TODO 
-	// maybe check with other players if this isn't too slow or complicated 
-
 }
 
-// for clearing the recording queue 
-// duplicated from Events.cpp I think.......
-//void clearQueue2(std::queue<MyEvent>& q)
-//{
-//	std::queue<MyEvent> empty;
-//	std::swap(q, empty);
-//}
 
 
 class MainEventHandler : public EventHandler {
 public:
-
-
 	MainEventHandler() : EventHandler() {
-
 	}
 
-	
 
-	//virtual void onEvent(MyEvent e) = 0;
 	void onEvent(MyEvent e) {
 		if (e.type == "collision") {
-			// cout << "collision: " + e.direction << endl; 
 			if (e.objectType == "player") {
 				if (e.direction == "left") {
-					//cout << "collision left - e.stepSize = " + to_string(e.stepSize) << endl; 
 					players.at(e.objectID).move(e.stepSize, 0); 
 				}
 				if (e.direction == "right") {
@@ -348,49 +336,34 @@ public:
 				}
 			}
 
-			
-
 		}
+		
 		else if (e.type == "death") {
 			MyEvent event("spawn", 1, e.objectID, "player", "", 0); 
 			eventManager.addEvent(event); 
-
 		}
+
 		else if (e.type == "spawn") {
 			players.at(e.objectID).setPosition(spawnX, spawnY);
-
 		}
+		
 		else if (e.type == "userInput") {
-
-			// players.at(e.objectID).lastPing = thisTime.getTime(); 
-
+			
 			if (e.direction == "left") {
-
 				players.at(e.objectID).move(-LeftRightspeed, 0);
 				isColliding("left", e.objectID, e.objectType, +.1f);
-
 			}
+			
 			else if (e.direction == "right") {
-
 				players.at(e.objectID).move(+LeftRightspeed, 0);
 				isColliding("right", e.objectID, e.objectType, -.1f);
-
 			}
+			
 			else if (e.direction == "up") {
-
-				// players.at(e.objectID).move(0, -.1f);
-				// isColliding("up", e.objectID, e.objectType);
 				verticalVelocity = jumpVelocity; 
-
-
-			}
-			else if (e.direction == "down") {
-
-				//players.at(e.objectID).move(0, +.1f);
-				//isColliding("down", e.objectID, e.objectType, -.1f);
-
 			}
 		}
+
 		else if (e.type == "startRecording") {
 
 			if (!currentlyRecording) {
@@ -405,23 +378,20 @@ public:
 				recordedVerticalVelocity = verticalVelocity;
 				recordingStartTime = thisTime.getTime();
 
-
-				/*
-					- set flag for executeAction() to start recording all outgoing userInput
-						and ping Events
-					- DO NOT record events for start/stop recording
-					- Let engine re-generate collision, death, and spawn events
-				*/
+				
+				//	- set flag for executeAction() to start recording all outgoing userInput
+				//		and ping Events
+				//	- DO NOT record events for start/stop recording
+				//	- Let engine re-generate collision, death, and spawn events
 				currentlyRecording = true;
-
 			} 
-
 		}
-		else if (e.type == "stopRecording") {
 
+		else if (e.type == "stopRecording") {
 			// set flag for executeAction() to stop recording all outgoing Events 
 			currentlyRecording = false; 
 		}
+		
 		else if (e.type == "replayRecording") {
 
 			if (!currentlyPlaying) {
@@ -448,14 +418,10 @@ public:
 				platforms = recordedPlatforms;
 				movingPlatforms = recordedMovingPlatforms;
 				verticalVelocity = recordedVerticalVelocity;
-
 			} 
-
 		}
-		else if (e.type == "replayFinished") {
-			
-			cout << "replay has Finished" << endl;
 
+		else if (e.type == "replayFinished") {
 
 			// restore the state of everything as before the recording 
 			players = originalPlayers; 
@@ -469,13 +435,12 @@ public:
 
 			// set currentlyPlaying flag to false; start receiving client input again 
 			currentlyPlaying = false; 
-
-
 		} 
+
 		else if (e.type == "ping") {
 			players.at(e.objectID).lastPing = thisTime.getTime(); 
-
 		}
+
 		else if (e.type == "timeChange") {
 			
 			if (e.direction == "normal") {
@@ -487,14 +452,9 @@ public:
 			else if (e.direction == "half") {
 				thisTime.halfTime(); 
 			}
-
 		}
-
-
-
 	}
 };
-
 
 
 void executeAction(int clientID, string message, string type) {
@@ -506,15 +466,10 @@ void executeAction(int clientID, string message, string type) {
 
 		if (currentlyRecording &&
 		   (event.type == "userInput" || event.type == "ping")) {
-
+			
 			recording.push(event);
-		
 		}
 	}
-
-	
-
-
 }
 
 
@@ -553,11 +508,8 @@ void pullThread()
 		// execute action for that player 
 		if (type != "firstConnection") {
 			executeAction(thisClientID, message, type);
-
 		}
-
 	}
-	
 }
 
 
@@ -565,17 +517,7 @@ void pullThread()
 int main()
 {
 	MainEventHandler handler = MainEventHandler(); 
-
-	eventManager.registerHandler("userInput", handler); 
-	eventManager.registerHandler("death", handler);
-	eventManager.registerHandler("spawn", handler);
-	eventManager.registerHandler("collision", handler);
-	eventManager.registerHandler("startRecording", handler);
-	eventManager.registerHandler("stopRecording", handler);
-	eventManager.registerHandler("ping", handler);
-	eventManager.registerHandler("replayRecording", handler);
-	eventManager.registerHandler("replayFinished", handler);
-	eventManager.registerHandler("timeChange", handler); 
+	eventManager.registerHandler("all", handler); 
 
 	// create moving platform 1  
 	MovingPlatform movingPlatform(sf::Vector2f(120.f, 50.f));
@@ -601,7 +543,6 @@ int main()
 	platform.id = 1;
 	platforms.insert(pair<int, Platform>(platform.id, platform));
 
-
 	// create death zone
 	Platform platform2(sf::Vector2f(200.f, 200.f), "deathZone");
 	platform2.setSize(sf::Vector2f(100.f, 100.f));
@@ -611,8 +552,6 @@ int main()
 	platform2.setOutlineThickness(5);
 	platform2.id = 2;
 	platforms.insert(pair<int, Platform>(platform2.id, platform2));
-
-
 
 	// start pull thread 
 	thread t1(pullThread);
@@ -625,12 +564,6 @@ int main()
 	int stepsTaken = 0; 
 	int theLastTime = 0; 
 	while (1) {
-
-		int theCurrentTime = thisTime.getTime(); 
-		if (theCurrentTime >= theLastTime + 1) {
-			cout << thisTime.getTime() << endl;
-			theLastTime = theCurrentTime; 
-		}
 
 		Sleep(1); 
 
@@ -657,21 +590,9 @@ int main()
 			}
 
 			if (recording.empty()) {
-				cout << "recording empty..." << endl; 
-
-				//MyEvent thisEv("replayFinished", 1, 0, 0, "", 0); 
 				MyEvent whatever("replayFinished", 1, 10, "blah", "blah", 2); 
-				
-				cout << "here 1..." << endl;
-
 				eventManager.addEvent(whatever); 
-
-				cout << "here 2..." << endl;
-
 			}
-
-
-
 		}
 
 
@@ -715,9 +636,8 @@ int main()
 		map<int, Player>::iterator itr;
 		for (itr = players.begin(); itr != players.end(); ++itr ) {
 
-			// if this player hasn't pinged in the last 3 seconds, remove them  
+			// if this player hasn't pinged in the last <timeoutSize> seconds, remove them  
 			if ((thisTime.getTime() - timeoutSize) > (itr->second.lastPing)) {
-
 				playersToErase.push_back(itr->first); 
 			}
 			else {
@@ -733,7 +653,6 @@ int main()
 		for (int i = 0; i < playersToErase.size(); i++) {
 			players.erase(playersToErase.at(i)); 
 		}
-
 
 		if (!players.empty()) {
 
@@ -798,18 +717,12 @@ int main()
 
 
 			for (int i = 0; i < messages.size(); i++) {
-				//std::cout << "sending message: " + messages[i] << std::endl; 
 				s_send(publisher, messages[i]);
 			}
-
 		}
-
 	}
 
 	t1.join();
-
-
 	return 0; 
-
 }
 

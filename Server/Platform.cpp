@@ -15,4 +15,8 @@ public:
 		this->id = 0;
 		this->type = type; 
 	}
+
+	void myMove(float x, float y) {
+		move(x, y); 
+	}
 };

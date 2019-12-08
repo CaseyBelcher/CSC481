@@ -1,4 +1,6 @@
 #include <iostream>
+#include <fstream>
+#include <streambuf>
 #include <zmq.hpp>
 #include <stdio.h>
 #include <stdlib.h>
@@ -14,6 +16,7 @@
 #include "MovingPlatform.cpp"
 #include "Platform.cpp"
 
+#include <dukglue/dukglue.h>
 
 // #include "Events.cpp"
 #include "TimeLine.cpp"
@@ -44,9 +47,9 @@ float windowHeight = 600.f;
 float verticalVelocity = 0.f; 
 float recordedVerticalVelocity; 
 float originalVerticalVelocity; 
-float jumpVelocity = -20.f; 
+float jumpVelocity = -70.f; 
 
-float gravityPull = 1.f; 
+float gravityPull = 6.f; 
 bool currentlyRecording = false; 
 int recordingStartTime; 
 int replayStartTime; 
@@ -344,7 +347,7 @@ public:
 		}
 
 		else if (e.type == "spawn") {
-			players.at(e.objectID).setPosition(spawnX, spawnY);
+			// players.at(e.objectID).setPosition(spawnX, spawnY);
 		}
 		
 		else if (e.type == "userInput") {
@@ -514,8 +517,230 @@ void pullThread()
 
 
 
+static void load_script_from_file(duk_context* ctx, const char* filename) // Note: I think it's better to take a const char* as an input because this is what string literals are. 
+{																		  //		If this took a string, the compiler would add additional steps to convert the string literal to a string object.
+	std::ifstream t(filename);
+	std::stringstream buffer;
+	buffer << t.rdbuf();
+	duk_push_lstring(ctx, buffer.str().c_str(), (duk_size_t)(buffer.str().length()));
+}
+
+static duk_ret_t native_print(duk_context* ctx)
+{
+	duk_push_string(ctx, " ");
+	duk_insert(ctx, 0);
+	duk_join(ctx, duk_get_top(ctx) /* #args -> need to do this if we pass DUK_VARARGS when pushing this c_function */
+		- 1);
+	printf("%s\n", duk_safe_to_string(ctx, -1));
+	return 0;
+}
+
+
+//class Vector2f
+//{
+//public:
+//	Vector2f(double x, double y) : m_fX(x), m_fY(y) {}
+//	Vector2f() { m_fX = 0; m_fY = 0; }
+//
+//	float Dot(Vector2f& other)
+//	{
+//		return m_fX * other.GetX() + m_fY * other.GetY();
+//	}
+//
+//	float Distance(Vector2f& other)
+//	{
+//		return sqrt(pow(m_fX - other.GetX(), 2) + pow(m_fY - other.GetY(), 2));
+//	}
+//
+//	/* Getters and setters */
+//	double GetX() { return m_fX; }
+//	double GetY() { return m_fY; }
+//	void SetX(float x) { m_fX = x; }
+//	void SetY(float y) { m_fY = y; }
+//
+//private:
+//	double m_fX;
+//	double m_fY;
+//};
+
+
+
+class ScriptManager {
+
+
+	public:
+		duk_context* ctx;
+		EventHandler* eventHandler; 
+
+		ScriptManager() { }
+
+		ScriptManager(duk_context* ctx) {
+			this->ctx = ctx; 
+		}
+
+
+		int loadFunctionsForEventHandling() {
+
+			dukglue_register_method(ctx, &Platform::myMove, "move");
+			dukglue_register_method(ctx, &MovingPlatform::myMove, "move");
+			dukglue_register_property(ctx, &Player::getClientID, nullptr, "getClientID");
+			dukglue_register_method(ctx, &Player::myMove, "move");
+			dukglue_register_method(ctx, &Player::mySetPosition, "setPosition");
+
+
+			duk_push_c_function(ctx, native_print, DUK_VARARGS);
+			duk_put_global_string(ctx, "print");
+
+			// Load script from file, evaluate script
+			load_script_from_file(ctx, "game1movement.js"); // This helper function pushes the script as a string to the value stack
+			if (duk_peval(ctx) != 0) {
+				printf("Error: %s\n", duk_safe_to_string(ctx, -1));
+				duk_destroy_heap(ctx);
+				return 1;
+			}
+			duk_pop(ctx); // Ignore return, clear stack
+
+			duk_push_global_object(ctx);			// [...] -> [... global] (top)
+			duk_get_prop_string(ctx, -1, "myTest2");
+		}
+
+		int loadFunctions() {
+
+
+			//dukglue_register_method(ctx, &Vector2f::Dot, "dot");
+			dukglue_register_method(ctx, &Platform::myMove, "move");
+			dukglue_register_method(ctx, &MovingPlatform::myMove, "move");
+			//dukglue_register_method(ctx, &Platform::getPosition, "getPosition");
+			//dukglue_register_property(ctx, &Platform::getPosition, nullptr, "getPosition");
+			dukglue_register_property(ctx, &Player::getClientID, nullptr, "getClientID");
+			dukglue_register_method(ctx, &Player::myMove, "move");
+
+
+			duk_push_c_function(ctx, native_print, DUK_VARARGS);
+			duk_put_global_string(ctx, "print");
+
+			// Load script from file, evaluate script
+			load_script_from_file(ctx, "game1movement.js"); // This helper function pushes the script as a string to the value stack
+			if (duk_peval(ctx) != 0) {
+				printf("Error: %s\n", duk_safe_to_string(ctx, -1));
+				duk_destroy_heap(ctx);
+				return 1;
+			}
+			duk_pop(ctx); // Ignore return, clear stack
+
+			duk_push_global_object(ctx);			// [...] -> [... global] (top)
+			duk_get_prop_string(ctx, -1, "myTest");
+
+		}
+
+		void executeScript(Player& player) {
+			/* This demonstrates passing objects declared in C++ to scripts */
+			/*Vector2f a(2, 3); Vector2f b(4, 5);
+			dukglue_push(ctx, &a);
+			dukglue_push(ctx, &b);	*/				// [... global myTest] -> [... global myTest a b]
+
+			//dukglue_push(ctx, &platform);
+			dukglue_push(ctx, &player);
+			
+
+			if (duk_pcall(ctx, /* Number of arguments to pull of the stack for the function call */ 1) != 0) // duk_pcall calls the function we specified on the stack (myTest) with number of arguments
+				printf("Error: %s\n", duk_safe_to_string(ctx, -1));											  // that we specify, then places any return value at the top of the stack (index -1)
+			else
+				printf("%s\n", duk_safe_to_string(ctx, -1));
+
+			duk_pop(ctx);
+		}
+
+		void executeScript2(MovingPlatform& platform) {
+			/* This demonstrates passing objects declared in C++ to scripts */
+			/*Vector2f a(2, 3); Vector2f b(4, 5);
+			dukglue_push(ctx, &a);
+			dukglue_push(ctx, &b);	*/				// [... global myTest] -> [... global myTest a b]
+
+			//dukglue_push(ctx, &platform);
+			dukglue_push(ctx, &platform);
+
+
+			if (duk_pcall(ctx, /* Number of arguments to pull of the stack for the function call */ 1) != 0) // duk_pcall calls the function we specified on the stack (myTest) with number of arguments
+				printf("Error: %s\n", duk_safe_to_string(ctx, -1));											  // that we specify, then places any return value at the top of the stack (index -1)
+			else
+				//printf("%s\n", duk_safe_to_string(ctx, -1));
+
+			duk_pop(ctx);
+		}
+
+		void executeHandlerScript(Player& player) {
+			
+			dukglue_push(ctx, &player); 
+		
+			if (duk_pcall(ctx, /* Number of arguments to pull of the stack for the function call */ 1) != 0) // duk_pcall calls the function we specified on the stack (myTest) with number of arguments
+				printf("Error: %s\n", duk_safe_to_string(ctx, -1));											  // that we specify, then places any return value at the top of the stack (index -1)
+			else
+				//printf("%s\n", duk_safe_to_string(ctx, -1));
+
+				duk_pop(ctx);
+		
+			
+		}
+
+		//
+
+
+};
+
+class ScriptEventHandler : public EventHandler {
+	public:
+		ScriptManager manager; 
+
+		/*ScriptEventHandler() : EventHandler() {
+
+		}*/
+
+		ScriptEventHandler(ScriptManager manager) : EventHandler() {
+			this->manager = manager; 
+		}
+
+		void onEvent(MyEvent e) {
+			if (e.type == "spawn") {
+				manager.loadFunctionsForEventHandling(); 
+				manager.executeHandlerScript(players.at(e.objectID)); 
+			}
+		}
+
+
+
+};
+
+
+
+
 int main()
 {
+
+	Player whatever(50.f);
+	whatever.setPosition(250, 250); 
+
+
+
+	// Create a heap and initial context
+	duk_context* ctx = NULL;
+
+	ctx = duk_create_heap_default();
+	if (!ctx) {
+		printf("Failed to create a Duktape heap.\n");
+		exit(1);
+	}
+
+	ScriptManager scriptManager(ctx); 
+
+	ScriptEventHandler scriptEventHandler(scriptManager);
+
+	eventManager.registerHandler("spawn", scriptEventHandler); 
+
+
+
+
+
 	MainEventHandler handler = MainEventHandler(); 
 	eventManager.registerHandler("all", handler); 
 
@@ -563,7 +788,26 @@ int main()
 	bool movingLeft = false;
 	int stepsTaken = 0; 
 	int theLastTime = 0; 
+
+
+
+
+
+
+
+
+
 	while (1) {
+
+
+
+		
+
+
+		scriptManager.loadFunctions(); 
+	
+
+
 
 		Sleep(1); 
 
@@ -600,14 +844,23 @@ int main()
 		eventManager.handleAllEvents();
 
 
+		/*cout << "whatever's x position: " + to_string(whatever.getPosition().x) << endl; 
+		scriptManager.executeScript(whatever);*/ 
+		//cout << "movingplatform position: " + to_string(movingPlatforms.at(1).getPosition().x) << endl;
+		//scriptManager.executeScript2(movingPlatforms.at(1));
+
+
+
+
 		// as the server, dictate the moving platforms 
 		if (movingLeft) {
 			for (int i = 0; i < 10; i++) {
-				movingPlatforms.at(1).move(-.05f, 0);
+				//movingPlatforms.at(1).move(-.05f, 0);
+				scriptManager.executeScript2(movingPlatforms.at(1)); 
 				isCollidingIntoPlayer("left", 1, -.05f);
 
-				movingPlatforms.at(2).move(0, +.05f); 
-				isCollidingIntoPlayer("down", 2, +.05f); 
+				movingPlatforms.at(2).move(0, +.05f);
+				isCollidingIntoPlayer("down", 2, +.05f);
 				stepsTaken++;
 			}
 			if (stepsTaken >= 1300) {
@@ -629,6 +882,41 @@ int main()
 				movingLeft = true;
 			}
 		}
+
+
+
+
+
+
+		//// as the server, dictate the moving platforms 
+		//if (movingLeft) {
+		//	for (int i = 0; i < 10; i++) {
+		//		movingPlatforms.at(1).move(-.05f, 0);
+		//		isCollidingIntoPlayer("left", 1, -.05f);
+
+		//		movingPlatforms.at(2).move(0, +.05f); 
+		//		isCollidingIntoPlayer("down", 2, +.05f); 
+		//		stepsTaken++;
+		//	}
+		//	if (stepsTaken >= 1300) {
+		//		stepsTaken = 0;
+		//		movingLeft = false;
+		//	}
+		//}
+		//else {
+		//	for (int i = 0; i < 10; i++) {
+		//		movingPlatforms.at(1).move(+.05f, 0);
+		//		isCollidingIntoPlayer("right", 1, +.05f);
+
+		//		movingPlatforms.at(2).move(0, -.05f);
+		//		isCollidingIntoPlayer("up", 2, -.05f);
+		//		stepsTaken++;
+		//	}
+		//	if (stepsTaken >= 1300) {
+		//		stepsTaken = 0;
+		//		movingLeft = true;
+		//	}
+		//}
 
 		vector<int> playersToErase; 
 
@@ -721,6 +1009,8 @@ int main()
 			}
 		}
 	}
+	
+	duk_destroy_heap(ctx);
 
 	t1.join();
 	return 0; 

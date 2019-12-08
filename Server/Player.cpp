@@ -14,5 +14,17 @@ public:
 		this->clientID = 0; 
 	}
 
+	int getClientID() {
+		return this->clientID; 
+	}
+
+	void myMove(float x, float y) {
+		move(x, y); 
+	}
+	
+	void mySetPosition(float x, float y) {
+		setPosition(x, y); 
+	}
+
 
 };
